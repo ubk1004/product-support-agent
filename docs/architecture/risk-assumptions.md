@@ -1,0 +1,51 @@
+---
+title: Product Support Agent Risks and Assumptions
+description: Phase 0 risk and assumption register for the local-first product support demo
+author: Product Support Agent Team
+ms.date: 2026-11-21
+ms.topic: reference
+keywords:
+  - risk register
+  - assumptions
+  - product support
+estimated_reading_time: 6
+---
+
+## Status
+
+This Phase 0 risk and assumption register is preliminary. Detailed STRIDE and
+AI-specific threats are tracked in the
+[Phase 0b threat register](../security/threat-register.md). Ratings are
+qualitative and require review.
+
+## Risks
+
+| ID | Risk | Rating | Proposed response | Owner | Phase |
+|---|---|---|---|---|---:|
+| R-01 | The OpenText listing and feed do not yet provide a verified, parseable anonymous catalog contract; the search API returned 401. | High | Use only the authorized 100 additional GETs as a strict aggregate cap, with bounded response reads. Resolve endpoint behavior, pagination, fallback, terms, and per-run limits before Phase 2. | Product owner and ingestion lead | 0, 2 |
+| R-02 | The search API returned 401; protected support content could be misclassified as missing or retried with unsafe credentials. | High | Treat 401/403 and login redirects/content as protected skips. Never authenticate or bypass access restrictions. | Ingestion lead | 2 |
+| R-03 | Random product selection could vary between runs and make the UI and evaluation irreproducible. | Medium | Parameterize the maximum at 100; persist and version one exact random manifest; require explicit replacement and show product-level ingestion outcomes. | Product owner | 2 |
+| R-04 | The user requests query/response retention for demo review, but notice, access, redaction, retention, and deletion rules are not approved. | High | Add global and per-session off controls, default retention off, and do not retain real content until the Phase 0b privacy policy is approved. | Privacy owner, TBD | 0b, 6 |
+| R-05 | Local access to Azure AI Search and Foundry depends on user-supplied service configuration, network access, quota, and authentication. | Medium | Keep unit/integration tests deterministic; document connectivity and quota prerequisites for the local demo. | Demo operator, TBD | 1, 6 |
+| R-06 | The model may repeat injected source instructions, invent citations, or render unsafe source links. | High | Treat source text as untrusted; render only server-resolved URLs from retrieved evidence; test injection and rendering paths. | Agent lead | 0b, 4, 5 |
+| R-07 | The conceptual cloud network and identity design may not match current regional SKU, quota, or service constraints. | Medium | Validate against current Microsoft documentation and subscription facts in Phase 7; do not deploy the application stack. | Cloud architect, TBD | 7 |
+| R-08 | “Working demo” may not establish that target users can complete useful support tasks. | Medium | Define users, priority tasks, task success measures, and a moderated usability study in Phase 0/5. | Product owner | 0, 5 |
+
+## Assumptions
+
+| ID | Assumption | Validation or decision |
+|---|---|---|
+| A-01 | Product and support pages may be accessed only when publicly available without authentication. | Confirm source terms and permitted automated access before Phase 2. |
+| A-02 | The local demo uses the user's Azure AI Search and Foundry deployments; no local model or vector store is introduced. | Confirm endpoint/deployment configuration and Entra ID or key-based auth in Phase 0. |
+| A-03 | The demo catalog uses a random, stable manifest with a parameterized hard maximum of 100 products. | Persist the selected IDs and outcomes; do not exceed the hard maximum or replace a manifest without an explicit operation. |
+| A-04 | MongoDB is the local metadata/canonical-data candidate; Azure AI Search is the derived search index. | Approve system-of-record ownership and retention before Phase 2. |
+| A-05 | The MVP is local-first. The application stack is not deployed to Azure. | Keep cloud IaC and network-slice work behind Phase 7 approval. |
+| A-06 | Query/response retention is a requested demo feature, but must be disabled until policy approval. | Approve the privacy impact assessment, notice, access, redaction, retention, and deletion controls before enabling it. |
+| A-07 | User questions, retrieved text, and provider responses are untrusted inputs. | Enforce validation, provenance, redaction, and abuse-case tests. |
+
+## Source probe evidence
+
+The initial probe is summarized in the
+[decision register](./decision-register.md#initial-source-probe). The result is
+not sufficient to claim that catalog discovery or fallback behavior is verified.
+No product content was stored.

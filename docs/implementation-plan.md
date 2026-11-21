@@ -14,7 +14,7 @@ estimated_reading_time: 12
 
 ## Purpose and approval model
 
-This plan turns the requirements in [Instructions.md](../Instructions.md) into a staged, testable delivery path. It is a planning artifact only. No application code, infrastructure, pipelines, or folder structure is being created in this step.
+This plan turns the requirements in [Instructions.md](../Instructions.md) into a staged, testable delivery path. Phase 0, Phase 0b, and Phase 1 have been approved; implementation is limited to the current approved phase. No cloud resources or application deployments are authorized.
 
 Each phase is a separate review gate. We will not begin a phase until you approve its scope, decisions, and exit criteria. A phase is complete only after its deliverables and relevant tests pass and you approve moving on.
 
@@ -36,29 +36,27 @@ The longer-term OpenText Service Management expansion is an architectural consid
 
 The demo runs locally. The Azure design is presented as a validated blueprint, with an explicit statement of which security controls are demonstrated locally and which are designed only.
 
-## Proposed repository structure
+## Approved repository structure
 
-Adopt a Python `src` layout and keep application code, tests, documentation, infrastructure, and automation distinct. The exact package boundaries and hosting split are Phase 0 decisions; this is a starting proposal, not an instruction to create all directories immediately.
+Use a Python `src` layout for the backend and keep application code, tests, documentation, infrastructure, and automation distinct.
 
 ```text
 product-support-agent/
 ├── docs/
 │   ├── architecture/
-│   │   ├── diagrams/
 │   │   └── decisions/
 │   ├── security/
 │   ├── operations/
 │   └── implementation-plan.md
+├── apps/
+│   └── web/
+│       ├── package.json
+│       ├── package-lock.json
+│       └── src/
+│           └── app/
 ├── src/
-│   ├── apps/
-│   │   ├── api/
-│   │   ├── chat/
-│   │   └── ingestion_worker/
-│   └── packages/
-│       ├── agent/
-│       ├── ingestion/
-│       ├── retrieval/
-│       └── shared/
+│   └── product_support_agent/
+│       └── api/
 ├── tests/
 │   ├── unit/
 │   ├── integration/
@@ -69,16 +67,18 @@ product-support-agent/
 │   └── bicep/
 │       ├── modules/
 │       └── environments/
-├── pipelines/
-│   └── scripts/
 ├── .github/
+│   ├── CODEOWNERS
 │   └── workflows/
 ├── pyproject.toml
+├── uv.lock
+├── compose.yaml
+├── .env.example
 ├── README.md
 └── Instructions.md
 ```
 
-Keep test data synthetic or explicitly approved. Do not commit credentials, customer data, scraped source content, generated secrets, or local state. Use `docs/architecture/decisions/` for accepted architecture decision records (ADRs), and retain Mermaid diagrams as text in `docs/architecture/diagrams/`.
+Keep test data synthetic or explicitly approved. Do not commit credentials, customer data, scraped source content, generated secrets, or local state. Use `docs/architecture/decisions/` for accepted architecture decision records (ADRs), and retain Mermaid diagrams as text in architecture documentation.
 
 ## Target architecture to validate
 
@@ -88,7 +88,7 @@ The proposed flow is:
 2. An ingestion worker fetches only approved public URLs, observes HTTP status and retry headers, skips authentication-protected material, normalizes permitted content, chunks it, creates embeddings through a gateway, and updates the search index idempotently.
 3. The retrieval layer combines keyword, metadata, and semantic signals and returns source IDs, URLs, and relevant excerpts with each result.
 4. A FastAPI service coordinates retrieval and a Microsoft Agent Framework agent. A model gateway provides a replaceable interface for embedding and chat models.
-5. Chainlit provides the user-facing chat experience, clearly identifies the demo catalog, and renders citations supplied by retrieval rather than invented by the model.
+5. A React/Next.js frontend provides the user-facing chat experience, clearly identifies the demo catalog, and renders citations supplied by retrieval rather than invented by the model.
 6. OpenTelemetry-compatible traces, metrics, and appropriately minimized logs support evaluation and operations. Production cloud resources use managed identity where supported; GitHub Actions uses federated identity for deployment.
 
 The exact trust boundaries, component placement, and network paths must be approved in Phase 0. Mermaid context, container, data-flow, and deployment diagrams are Phase 0 deliverables.
@@ -114,7 +114,7 @@ The requirements identify desired technologies but leave behavior and ownership 
 | Model and gateway | LiteLLM and Azure API Management are not necessarily equivalent in model routing, identity, policy, or telemetry. | Specify the gateway contract, model/version configuration, credentials, safety policy, quotas, and failure behavior. Chat and embedding calls target user-provided Foundry deployments. Changing the embedding model changes vector dimensions and requires reindexing, so record the embedding model and dimension in the index schema and use versioned indexes or aliases. Verify APIM’s role relative to model-provider endpoints and avoid hard-coding provider-specific behavior in the agent. |
 | Authentication | Runtime system-assigned managed identity does not by itself define end-user authentication or GitHub Actions deployment authentication. | Decide whether the demo is public, access-restricted, or organization-only. Use workload identity federation for CI/CD and runtime managed identity for Azure resource access where supported. |
 | Network topology | “APIM external mode with VNET integration,” Container Apps, and “all backend services under the VNET” need a concrete supported topology and subnet plan. | Validate the chosen APIM SKU/network model, Container Apps environment networking, private endpoints, DNS, egress, and subnet sizing against current Azure capabilities before Bicep is approved. Do not assume every managed service can be placed inside a VNet. Design-only for the MVP; resolved in Phase 7. |
-| Hosting boundaries | It is unclear whether Chainlit, FastAPI, and the worker are separate deployables or one service. | Keep UI/API/worker boundaries explicit in code. Choose separate Container Apps or a smaller MVP deployment only after operational, security, and scaling trade-offs are documented. |
+| Hosting boundaries | It is unclear whether the Next.js frontend, FastAPI, and worker are separate deployables or one service. | Keep UI/API/worker boundaries explicit in code. Choose separate Container Apps or a smaller MVP deployment only after operational, security, and scaling trade-offs are documented. |
 | Evaluation | “Factual grounding” and “citation accuracy” lack dataset ownership, thresholds, and release-blocking criteria. | Create versioned, reviewed question/answer/source cases and agree on measurable thresholds for citation validity, groundedness, relevance, refusal, latency, and cost before model release gates. |
 | Pipeline security | SAST, DAST, and IAST are requested without tools, pipeline stages, environments, or vulnerability thresholds. | Define quality/security gates, dependency and container scanning, secret detection, IaC validation, artifact provenance, and safe test environments in Phase 0/1. Apply DAST/IAST where the selected stack and hosting model support them. |
 | Production readiness | Scale, availability, support ownership, accessibility target, service objectives, and incident response are not defined. | Treat production as a later decision gate. Establish customer validation, accessibility testing, SLOs, alert ownership, retention, recovery, and support readiness before any production launch. |
@@ -149,6 +149,8 @@ The requirements identify desired technologies but leave behavior and ownership 
 * Define security boundaries, evaluation metrics, and production-readiness constraints. The threat model and privacy impact assessment are delivered in Phase 0b.
 * Create a requirement traceability matrix from the numbered items in [Instructions.md](../Instructions.md), a risk and assumptions register, and a support-ownership (RACI) outline.
 * Record the local-to-cloud component mapping (LiteLLM to APIM, MongoDB to Cosmos DB, Azurite to Storage Queue, Redis to Azure Cache; Azure AI Search is used in both) with known behavior differences, including that local code reaches Azure AI Search over its public endpoint while the cloud design uses a private endpoint. Add a security-posture matrix of controls demonstrated locally versus designed only.
+* Maintain the current Phase 0 artifacts in [the architecture overview](./architecture/architecture-overview.md), [decision register](./architecture/decision-register.md), [requirements traceability matrix](./architecture/requirements-traceability.md), [risk and assumptions register](./architecture/risk-assumptions.md), [support-ownership outline](./architecture/support-ownership.md), and [security-posture matrix](./security/security-posture.md). Record remaining approvals and safe deferrals in the decision register.
+* Record individual proposed architecture decisions as [ADRs](./architecture/decisions/), with status and consequences visible to reviewers.
 
 **Verification and exit gate:**
 
@@ -164,7 +166,7 @@ The requirements identify desired technologies but leave behavior and ownership 
 
 **Scope and deliverables:**
 
-* Build a data-flow diagram from the Phase 0 architecture, covering the local components and their cloud counterparts, with every trust boundary marked: external users, the Chainlit UI, the API, the agent, LiteLLM and the Foundry endpoints, the worker, the public OpenText sources, the queue, the data stores, and telemetry.
+* Build a data-flow diagram from the Phase 0 architecture, covering the local components and their cloud counterparts, with every trust boundary marked: external users, the Next.js UI, the API, the agent, LiteLLM and the Foundry endpoints, the worker, the public OpenText sources, the queue, the data stores, and telemetry.
 * Create an asset and data inventory: scraped content, user queries and responses, the manifest, embeddings, model credentials, run status, and telemetry. State classification, owner, storage location, and retention for each.
 * Analyze threats with STRIDE per trust boundary plus AI-specific threats from the OWASP Top 10 for LLM Applications and MITRE ATLAS. At minimum, assess:
   * indirect prompt injection through scraped content
@@ -178,10 +180,11 @@ The requirements identify desired technologies but leave behavior and ownership 
   * secret exposure in configuration and logs
   * unauthorized access to or tampering with the Azure AI Search index, and credential exposure on developer machines
   * supply-chain risk in dependencies and container images
-  * XSS in the Chainlit rendering path
+  * XSS in the React/Next.js rendering path
 * Maintain a threat register. Each entry records an ID, description, affected boundary or asset, rating and rationale, mitigation, owning phase, verifying test, and status (mitigated, accepted, or deferred), plus the cloud control it maps to.
 * Write a privacy impact assessment for retained queries and responses: purpose, lawful basis or approval, notice text, access control, redaction approach, retention and deletion, reviewer roles for malicious-attempt detection, and incident handling.
 * Define abuse-case and red-team test requirements for the prompt-injection and exfiltration threats, so they feed the Phase 4 and Phase 6 test and evaluation suites.
+* Maintain the [threat register](./security/threat-register.md) and [privacy impact assessment](./security/privacy-impact-assessment.md) as Phase 0b drafts until their approval gate.
 
 **Verification and exit gate:**
 
@@ -194,15 +197,17 @@ The requirements identify desired technologies but leave behavior and ownership 
 
 ### Phase 1: Repository foundation and local development
 
+**Status:** Implementation and automated verification are complete; phase-exit review is pending.
+
 **Goal:** Establish a consistent, testable project foundation before implementing product behavior.
 
 **Scope and deliverables:**
 
-* Create the approved repository structure using Python `src` layout and the selected package boundaries. Initialize source control with branch protection, CODEOWNERS, and an ADR template.
+* Create the approved repository structure using Python `src` layout, a TypeScript Next.js app, and the selected package boundaries. Add CODEOWNERS and an ADR template. Branch protection remains a repository-host setting that must be enabled by an authorized maintainer.
 * Document supported Python version, dependency management, formatting, linting, type checking, configuration, and local run commands.
 * Define configuration and secret handling for local development; use Podman-compatible local service orchestration.
 * Establish test conventions, fixture policy, structured logging defaults, and correlation/run identifiers.
-* Add an initial GitHub Actions validation workflow for formatting, linting, typing, unit tests, dependency checks, and secret scanning.
+* Add an initial GitHub Actions validation workflow for formatting, linting, typing, unit tests, dependency checks, and secret scanning. Pin every external action to a verified full commit SHA.
 * Add a local development guide and a concise architecture overview.
 
 **Verification and exit gate:**
@@ -283,13 +288,13 @@ The requirements identify desired technologies but leave behavior and ownership 
 
 **Depends on:** Phase 3 approval; Phase 0 gateway, identity, and safety decisions.
 
-### Phase 5: Chainlit interface and customer usefulness validation
+### Phase 5: Next.js interface and customer usefulness validation
 
 **Goal:** Deliver a usable demo experience and test whether it helps target users complete real support tasks.
 
 **Scope and deliverables:**
 
-* Implement the Chainlit chat flow, visible demo limitations, supported-product names, source citations, and clear empty/error states.
+* Implement the Next.js chat flow, visible demo limitations, supported-product names, source citations, and clear empty/error states.
 * Do not display past search history in the MVP. Define whether browser/session state is transient and what is sent to backend telemetry.
 * Add accessible interaction patterns, keyboard navigation, screen-reader labels, readable citations, and responsive layouts.
 * Run moderated usability walkthroughs of the local demo with representative users using realistic support questions. The telemetry and privacy policy must be approved before any session captures user queries.
@@ -337,7 +342,7 @@ The requirements identify desired technologies but leave behavior and ownership 
 
 * Verify first, using current Microsoft documentation and Azure tooling, and record results in ADRs:
   * Canada Central availability and quota for every service and SKU, and for the user's Foundry model deployments.
-  * The APIM SKU and VNet model (classic injection versus v2 integration), and WebSocket behavior through APIM for Chainlit.
+  * The APIM SKU and VNet model (classic injection versus v2 integration), and HTTP streaming or WebSocket behavior through APIM for the Next.js UI if used.
   * Cosmos DB for MongoDB authentication modes, the AI Search tier required for private endpoints, Container Apps networking requirements, and the private DNS zone name for each service.
 * Write a naming and tagging standard: pattern `{type}-{workload}-{env}-{region}-{instance}` with Cloud Adoption Framework abbreviations and a region code (`cac`), a per-resource constraint table (length, allowed characters, global uniqueness for Storage, Key Vault, Cosmos DB, ACR, APIM, and Container Apps), a `uniqueString` suffix where needed, and mandatory tags (owner, environment, data classification, cost center, demo).
 * Author Bicep with a subscription-scope entry point that creates the resource group, followed by resource-group-scope modules. Use pinned AVM modules where available and thin composition modules otherwise; parameterize SKUs and keep per-environment parameter files. Cover:

@@ -1,0 +1,27 @@
+services:
+  mongodb:
+    image: docker.io/library/mongo:8.0.38-noble@sha256:52afee5c058069f3b4c1517eaf65a8326d9f58ce4ef4fd076043b8eab6905112
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:3.35.0
+    command:
+      - azurite
+      - --blobHost
+      - 0.0.0.0
+      - --queueHost
+      - 0.0.0.0
+      - --location
+      - /data
+    ports:
+      - "127.0.0.1:10000:10000"
+      - "127.0.0.1:10001:10001"
+    volumes:
+      - azurite_data:/data
+
+volumes:
+  mongodb_data:
+  azurite_data:
