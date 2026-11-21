@@ -18,9 +18,9 @@ keywords:
 * Node.js 20.9 or later and npm
 * Podman with a working `podman compose` provider for local MongoDB and Azurite
 
-The local application stack is not deployed to Azure. Product ingestion,
-Azure AI Search, model calls, and query/response retention are not enabled in
-this foundation phase.
+The local application stack is not deployed to Azure. Catalog discovery and ingestion can run only against approved public sources
+and synthetic local HTTP/queue tests. Azure AI Search, model calls, and
+query/response retention are not enabled in the Phase 2 implementation.
 
 ## Configure the Python environment
 
@@ -38,6 +38,12 @@ The process health endpoint is available at
 validate databases, queues, search, or model-provider connectivity.
 The health response includes a generated `X-Request-ID`. Application log
 records use JSON fields for timestamp, level, logger, message, and request ID.
+
+The Phase 2 manifest endpoint is available at
+`http://127.0.0.1:8000/catalog/manifest`. Before catalog discovery is prepared,
+it returns a `null` manifest and the last catalog outcome. Ingestion run details
+are available at `/ingestion/runs/{run_id}`. Routine catalog and worker tests use
+HTTP mocks and in-memory fakes; they do not contact OpenText or Azure services.
 
 ## Run the frontend
 

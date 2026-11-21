@@ -228,6 +228,11 @@ the [repository branch-protection backlog item](./operations/backlog.md).
 
 ### Phase 2: Source catalog and resilient ingestion
 
+**Status:** Implementation complete and the Phase 2 synthetic acceptance suite
+passes 56 tests. Live source verification and the manifest outcome are pending
+the approval gate. Azure OpenAI and Azure AI Search credentials are local
+configuration inputs only and are not used by Phase 2 catalog or ingestion code.
+
 **Goal:** Reliably discover the catalog and enqueue exactly the approved 100 products without exceeding source limits.
 
 **Scope and deliverables:**

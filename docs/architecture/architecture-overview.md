@@ -14,8 +14,10 @@ estimated_reading_time: 8
 ## Status
 
 The Phase 0 direction is approved. These diagrams reflect the approved local
-MVP direction and Phase 0b privacy request; they are not implementation or
-deployment evidence. See the [decision register](./decision-register.md).
+MVP direction and Phase 0b privacy request. Phase 1 and the Phase 2 catalog,
+manifest, queue, and ingestion-status interfaces are implemented for local
+validation. Cloud deployment remains unauthorized. See the
+[decision register](./decision-register.md).
 
 ## System context
 
