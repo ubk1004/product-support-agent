@@ -1,0 +1,7 @@
+# Keep LF in the working tree on every platform so formatter checks (Biome,
+# Ruff) behave the same on Windows checkouts with core.autocrlf as in CI.
+* text=auto eol=lf
+
+*.ico binary
+*.png binary
+*.svg text eol=lf

@@ -10,7 +10,7 @@ The upstream assets below were retrieved from [github/awesome-copilot](https://g
 | Local asset | Upstream path | Adaptation |
 |---|---|---|
 | [ADR Generator](./agents/adr-generator.agent.md) | `agents/adr-generator.agent.md` | Uses the planned ADR location and review gates |
-| [Accessibility Expert](./agents/accessibility.agent.md) | `agents/accessibility.agent.md` | Adds Chainlit scope; removes unpinned execution examples and fixed model/tools |
+| [Accessibility Expert](./agents/accessibility.agent.md) | `agents/accessibility.agent.md` | Adds Next.js chat UI scope and the WCAG 2.2 AA target; removes unpinned execution examples and fixed model/tools |
 | [Azure AVM Bicep](./agents/azure-verified-modules-bicep.agent.md) | `agents/azure-verified-modules-bicep.agent.md` | Adds cloud approval boundaries and removes environment-specific tool names |
 | [Bicep guidance](./instructions/bicep-code-best-practices.instructions.md) | `instructions/bicep-code-best-practices.instructions.md` | Adds Phase 7 constraints and avoids indiscriminate API upgrades |
 | [Microsoft Agent Framework skill](./skills/microsoft-agent-framework/SKILL.md) | `skills/microsoft-agent-framework/` | Adds local architecture and privacy constraints; avoids an unpinned install |

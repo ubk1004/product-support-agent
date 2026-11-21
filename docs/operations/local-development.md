@@ -119,5 +119,13 @@ privacy notice, reviewer identity, redaction behavior, deletion, TTL, and
 provider-handling approvals are complete. The Phase 1 app does not persist
 queries or responses.
 
-The logging filter redacts common labeled secrets and email addresses. It is
-not a general-purpose PII detector, so never log query or response content.
+The logging filter redacts common labeled secrets (for example `api_key`,
+`client_secret`, `AccountKey`, and SAS `sig`), credentials in connection-string
+URIs, bearer tokens, JWTs, cookies, and email addresses. It also applies to the
+uvicorn server and access logs, which include request query strings. It is
+pattern-based and not a general-purpose PII detector, so never log query or
+response content.
+
+`npm run typecheck` runs `next typegen` first, so it works on a clean checkout
+before any `next build`. The repository's `.gitattributes` keeps LF line endings
+on Windows so that Biome and Ruff formatting checks match CI.

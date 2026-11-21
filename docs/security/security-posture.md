@@ -13,10 +13,23 @@ estimated_reading_time: 5
 
 ## Status
 
-The Phase 0 direction is approved. No application security control listed below
-is implemented yet. Local controls require verification in Phases 1-6. Cloud
-controls are design-only unless a separately approved Phase 7 network-slice
-test explicitly exercises them.
+The Phase 0 direction is approved. Phase 1 implemented the baseline controls
+listed under [Phase 1 implemented controls](#phase-1-implemented-controls);
+every other local control remains planned and requires verification in Phases
+2-6. Cloud controls are design-only unless a separately approved Phase 7
+network-slice test explicitly exercises them.
+
+## Phase 1 implemented controls
+
+| Control | Implementation | Local evidence | Not yet verified |
+|---|---|---|---|
+| Log redaction | `RedactingFilter` and `JsonLogFormatter` on root handlers; uvicorn server and access loggers routed through them | Unit tests for labeled secrets, credentialed URIs, SAS signatures, bearer tokens, JWTs, cookies, email addresses, exception text, and uvicorn access logs; a live access-log check redacted query-string secrets | Not a general PII detector; traces are not instrumented until Phase 6 |
+| Dependency locking and audit | `uv.lock` with `uv sync --locked`; `package-lock.json` with `npm ci`; `pip-audit` and `npm audit --audit-level=high` | Local runs reported no known vulnerabilities on 2026-11-21 | GitHub-hosted CI has not run |
+| Static analysis | Ruff, strict mypy, Bandit, Biome, and TypeScript checks | Local and clean-clone runs pass | GitHub-hosted CI has not run |
+| Secret scanning | Gitleaks in the validation workflow | Workflow authored | GitHub-hosted CI has not run |
+| Workflow hardening | Actions pinned to full commit SHAs verified against release tags; `contents: read`; `persist-credentials: false` | SHAs checked against upstream tags on 2026-11-21 | Branch protection is pending ([OPS-001](../operations/backlog.md)) |
+| Local exposure | MongoDB and Azurite ports bound to `127.0.0.1`; the API run command binds to `127.0.0.1` | Podman listener check on 2026-11-21 | MongoDB runs without authentication and relies on loopback binding |
+| Retention off by default | `query_response_retention_enabled=false`; enabling it requires a reviewer role | Configuration unit tests | No retention feature exists yet |
 
 ## Control posture
 

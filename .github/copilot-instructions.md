@@ -8,7 +8,7 @@ Read `docs/implementation-plan.md` and `Instructions.md` before planning or impl
 
 ## Architecture
 
-* Use Python, FastAPI, Chainlit, Microsoft Agent Framework, LiteLLM, MongoDB, Azurite, and Podman as described in the plan.
+* Use a TypeScript React/Next.js frontend (`apps/web`) and Python with FastAPI, Microsoft Agent Framework, LiteLLM, MongoDB, Azurite, and Podman as described in the plan and [ADR-0005](../docs/architecture/decisions/adr-0005-ui-and-backend-technology.md). Chainlit is not used.
 * Use the user-provided Azure AI Search service for both local and cloud search; do not introduce a local vector store or local model.
 * Use the user-provided Foundry deployments through the model gateway. Keep model credentials outside source control.
 * Preserve the approved stable manifest of 100 products and display the demo's limited coverage.

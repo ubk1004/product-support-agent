@@ -13,9 +13,9 @@ estimated_reading_time: 9
 
 ## Status and method
 
-This is a draft threat register for user review. Ratings are qualitative
-pre-mitigation assessments. All mitigations are planned, not implemented or
-verified. The register uses STRIDE across the architecture trust boundaries and
+The user approved this register with conditions at the Phase 0b gate. Ratings
+are qualitative pre-mitigation assessments. Mitigations are planned unless the
+[Phase 1 review](#phase-1-review) records implemented evidence. The register uses STRIDE across the architecture trust boundaries and
 includes AI-specific risks from the
 [OWASP Top 10 for LLM Applications](https://owasp.org/www-project-top-10-for-large-language-model-applications/)
 and [MITRE ATLAS](https://atlas.mitre.org/).
@@ -62,10 +62,10 @@ the corresponding data-flow and deployment diagrams.
 | T-07 | Query/response retention exposes personal or sensitive content (TB-01, TB-07) | Information disclosure; privacy risk | High: requested demo retention still lacks final policy/provider approval | Keep the global flag off until approval; use the 7-day configurable TTL; show notice and per-session opt-out; redact before persistence and fail closed; restrict access to the configured reviewer role; test off modes and synthetic sensitive values | Privacy owner, TBD; Phase 0b/6 | Managed identity, RBAC, Key Vault, monitored retention controls | Pending policy approval |
 | T-08 | Denial-of-wallet or quota exhaustion from chat/embedding use (TB-02, TB-03) | Denial of service; resource abuse | High: unbounded requests can create cost or starve the user's deployments | Rate-limit, bound input/tokens/time/concurrency, apply gateway budgets, return explicit errors; test quota and timeout behavior | AI owner, Phase 4/6 | APIM quotas/rate limits and Azure Monitor alerts | Planned |
 | T-09 | Poisoned or stale index content survives source updates/deletions (TB-04, TB-06) | Tampering, repudiation | Medium: stale evidence can produce incorrect answers | Store source hash, timestamps, parser version, and stable IDs; reconcile updates/deletions; test replay, changed content, and removed sources | Search/data owner, Phase 3 | Search RBAC, private endpoint, index separation | Planned |
-| T-10 | Credentials or sensitive content leak through config, logs, traces, or test output (TB-07, TB-08) | Information disclosure | High: a leak can expose models, search data, or user content | Keep secrets outside git; use redaction; exclude content from spans; run secret scanning and synthetic canary checks; test logs/traces | Application/security owner, Phases 1/6 | Key Vault, managed identity, OIDC, RBAC | Planned |
-| T-11 | Unauthorized access to or tampering with Azure AI Search, including developer credential exposure (TB-06, TB-08) | Spoofing, tampering, information disclosure | High: index access can expose or alter evidence | Prefer Entra ID and least privilege; isolate test/demo indexes; protect developer credentials; review public endpoint/IP restrictions; use controlled access tests | Search owner, Phases 1/3/7 | Private endpoint, RBAC, private DNS, NSGs | Planned |
+| T-10 | Credentials or sensitive content leak through config, logs, traces, or test output (TB-07, TB-08) | Information disclosure | High: a leak can expose models, search data, or user content | Keep secrets outside git; use redaction; exclude content from spans; run secret scanning and synthetic canary checks; test logs/traces | Application/security owner, Phases 1/6 | Key Vault, managed identity, OIDC, RBAC | Partially mitigated: Phase 1 log controls in place; trace controls Phase 6 |
+| T-11 | Unauthorized access to or tampering with Azure AI Search, including developer credential exposure (TB-06, TB-08) | Spoofing, tampering, information disclosure | High: index access can expose or alter evidence | Prefer Entra ID and least privilege; isolate test/demo indexes; protect developer credentials; review public endpoint/IP restrictions; use controlled access tests | Search owner, Phases 1/3/7 | Private endpoint, RBAC, private DNS, NSGs | Planned: no Search access exists yet; Phase 1 secret handling applies |
 | T-12 | Queue replay or poison messages cause duplicate work or repeated source requests (TB-05) | Denial of service, tampering | Medium: queue delivery can repeat and exhaust limits | Make handlers idempotent; cap dequeue attempts; move poison items to a poison queue; track run completion; test duplicates and exhausted retries | Ingestion owner, Phase 2 | Storage Queue and scoped identity | Planned |
-| T-13 | Dependency, action, or container-image compromise (TB-08, TB-09) | Tampering, elevation of privilege | Medium: build artifacts can introduce malicious code | Lock dependencies; pin GitHub Actions by SHA; scan dependencies/images; review provenance and permissions; test CI policy gates | Build/security owner, Phases 1/7 | OIDC, protected environments, ACR scanning and RBAC | Planned |
+| T-13 | Dependency, action, or container-image compromise (TB-08, TB-09) | Tampering, elevation of privilege | Medium: build artifacts can introduce malicious code | Lock dependencies; pin GitHub Actions by SHA; scan dependencies/images; review provenance and permissions; test CI policy gates | Build/security owner, Phases 1/7 | OIDC, protected environments, ACR scanning and RBAC | Partially mitigated: Phase 1 locking, audits, and SHA pins in place; CI and image scanning not yet verified |
 | T-14 | Sensitive or malicious input crosses session/user boundaries in a no-auth local demo (TB-01, TB-02) | Spoofing, information disclosure | Medium: local access is not equivalent to authenticated user isolation | Bind locally; avoid shared/public exposure; isolate session state; test concurrent sessions and UI history behavior | API/UI owner, Phases 4/5 | User authentication and authorization are design-only for Phase 7 | Planned |
 | T-15 | Cloud identity, network, or private DNS assumptions permit unintended access (TB-09) | Spoofing, tampering, information disclosure | High: design assumptions can create an exposed or misrouted service | Verify SKU/network support, identity scope, private DNS, and egress paths; run static IaC checks and approved network-slice tests | Cloud owner, Phase 7 | Managed identity, RBAC, NSGs, private endpoints, private DNS | Planned |
 
@@ -76,4 +76,22 @@ the corresponding data-flow and deployment diagrams.
 * Phase owners must attach test evidence and update status to mitigated,
   accepted, or deferred before their phase gate.
 * A high-rated residual risk requires explicit acceptance by an accountable
-  owner. No such acceptance is recorded in this draft.
+  owner. No such acceptance is recorded yet.
+
+## Phase 1 review
+
+Reviewed on 2026-11-21 at the Phase 1 gate. Phase 1 added no new external data
+flow, trust boundary, or user-content store. It added local MongoDB and Azurite
+containers bound to loopback, a FastAPI health endpoint, a Next.js placeholder
+page, and a GitHub Actions validation workflow. No threats were added or
+re-rated.
+
+| Threat | Phase 1 scope | Evidence | Remaining before closure |
+|---|---|---|---|
+| T-10 | Keep secrets out of git; redact logs; scan for secrets | `.gitignore` excludes `.env*` except the example. Redaction covers root handlers and uvicorn server/access loggers. `tests/unit/test_logging.py` checks labeled secrets, credentialed URIs, SAS signatures, bearer tokens, JWTs, cookies, email addresses, exception text, and access-log query strings. Gitleaks runs in CI. | First GitHub-hosted Gitleaks run; trace and span redaction plus canary checks in Phase 6. Redaction is pattern-based, so query and response content must never be logged. |
+| T-11 | Developer credential handling only | No Azure AI Search credentials or client exist. Credentials stay in local environment configuration outside git. | Entra ID access, index isolation, and IP restriction tests in Phase 3; private endpoint design in Phase 7. |
+| T-13 | Dependency and workflow supply chain | `uv.lock` and `package-lock.json` installed with `--locked` and `npm ci`. `pip-audit` and `npm audit` are clean locally. Actions are pinned to full SHAs, verified against upstream release tags. The workflow uses `contents: read` and `persist-credentials: false`. | First GitHub-hosted CI run, branch protection ([OPS-001](../operations/backlog.md)), the `uv` bootstrap is installed without a hash, and container image scanning when application images exist. |
+
+Each threat's Phase 1 portion has the evidence listed above. The remaining
+items belong to later phases or to the first GitHub-hosted CI run. The user
+decides at the Phase 1 gate whether any of them must block closure.
