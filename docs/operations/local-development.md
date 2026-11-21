@@ -58,8 +58,40 @@ From the repository root, start the emulated services when needed:
 podman compose up -d mongodb azurite
 ```
 
-The services bind only to loopback. `podman compose down` stops them, and
-`podman compose down --volumes` removes their local data.
+The services bind only to loopback. Stop and start them gracefully to preserve
+emulator metadata:
+
+```powershell
+podman compose stop --timeout 30 mongodb azurite
+podman compose start mongodb azurite
+```
+
+Azurite has a 30-second shutdown grace period in Compose. During verification,
+a bare `podman restart` lost newly written Azurite metadata; explicit graceful
+stop/start preserved it. Do not use a forced stop or bare restart for emulator
+data you need to keep. This emulator does not provide production durability.
+
+`podman compose down --timeout 30` stops and removes the project containers
+while preserving their named volumes. Adding `--volumes` removes their local
+data.
+
+### Podman verification record
+
+Local verification passed on 2026-11-21 with Podman 5.6.2, a running WSL
+machine, and Docker Compose 2.34.0 as the external provider:
+
+* Compose validation, image pulls, and startup of MongoDB and Azurite passed.
+* Host listeners for ports 27017, 10000, and 10001 bound only to `127.0.0.1`.
+* MongoDB ping, synthetic document write/read, and restart persistence passed.
+* Authenticated Azurite queue and blob write/read through the host ports passed.
+* Azurite graceful stop/start preserved the message and blob. Message receipt,
+  acknowledgement, and an empty-queue check passed.
+* Synthetic databases, queues, and blob containers were removed after testing.
+
+Only this project's containers were stopped after verification; named volumes
+and unrelated workloads were preserved. No OpenText or cloud services were
+accessed. GitHub-hosted CI and repository branch protection remain separate
+verification items in the [operations backlog](./backlog.md).
 
 ## Validate changes
 

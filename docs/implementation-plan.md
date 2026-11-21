@@ -199,6 +199,13 @@ The requirements identify desired technologies but leave behavior and ownership 
 
 **Status:** Implementation and automated verification are complete; phase-exit review is pending.
 
+Local Podman verification passed on 2026-11-21, including loopback bindings,
+MongoDB round trips and persistence, and authenticated Azurite operations with
+graceful stop/start persistence. The [local development guide](./operations/local-development.md)
+records the bare-restart limitation and verified shutdown procedure.
+GitHub-hosted CI remains unverified, and required merge enforcement is pending
+the [repository branch-protection backlog item](./operations/backlog.md).
+
 **Goal:** Establish a consistent, testable project foundation before implementing product behavior.
 
 **Scope and deliverables:**
