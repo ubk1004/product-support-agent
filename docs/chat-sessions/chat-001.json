@@ -1,0 +1,725 @@
+{
+  "responderUsername": "GitHub Copilot",
+  "initialLocation": "panel",
+  "requests": [
+    {
+      "requestId": "request_c29653de-5048-48b2-b1f1-3f28099c3e3b",
+      "message": {
+        "parts": [
+          {
+            "range": {
+              "start": 0,
+              "endExclusive": 527
+            },
+            "editorRange": {
+              "startLineNumber": 1,
+              "startColumn": 1,
+              "endLineNumber": 1,
+              "endColumn": 528
+            },
+            "text": "Review this instruction document created by me and create a structured phase by phase implementation plan. I will review each phases before approving the implementation. The goal is not to jump into implementation but to review the details and close the architectural gaps so that I can create an useful product for the customers. I want the implementation plan in markdown format. I need to create appropriate folder structure to keep documentation / code/ test case/ pipelines separate, based on industry standard guidelines.",
+            "kind": "text"
+          }
+        ],
+        "text": "Review this instruction document created by me and create a structured phase by phase implementation plan. I will review each phases before approving the implementation. The goal is not to jump into implementation but to review the details and close the architectural gaps so that I can create an useful product for the customers. I want the implementation plan in markdown format. I need to create appropriate folder structure to keep documentation / code/ test case/ pipelines separate, based on industry standard guidelines."
+      },
+      "variableData": {
+        "variables": []
+      },
+      "response": [
+        {
+          "kind": "mcpServersStartingSlow",
+          "sessionResource": {
+            "$mid": 1,
+            "external": "agent-host-copilotcli:/1d5e49d8-bffe-4e3d-ae8f-6f5ed88de89c",
+            "path": "/1d5e49d8-bffe-4e3d-ae8f-6f5ed88de89c",
+            "scheme": "agent-host-copilotcli"
+          },
+          "servers": {
+            "_observers": {},
+            "_debugNameData": {},
+            "_state": 3,
+            "_value": [],
+            "_updateCount": 0,
+            "_dependencies": {},
+            "_dependenciesToBeRemoved": {},
+            "_isUpdating": false,
+            "_isComputing": false,
+            "_didReportChange": false,
+            "_isInBeforeUpdate": false,
+            "_isReaderValid": false,
+            "_removedObserverToCallEndUpdateOn": null
+          }
+        },
+        {
+          "kind": "autoModeResolution",
+          "resolved": {
+            "id": "gpt-6-luna",
+            "name": "GPT-6 Luna",
+            "reason": "Copilot Fusion selected GPT-6 Luna since the task has medium complexity."
+          },
+          "fusion": true
+        },
+        {
+          "kind": "toolInvocationSerialized",
+          "invocationMessage": {
+            "value": "Read [](file:///c%3A/ubk-repos/product-support-agent/Instructions.md)",
+            "isTrusted": false,
+            "supportThemeIcons": false,
+            "supportHtml": false,
+            "supportAlertSyntax": false
+          },
+          "pastTenseMessage": {
+            "value": "Read [](file:///c%3A/ubk-repos/product-support-agent/Instructions.md)",
+            "isTrusted": false,
+            "supportThemeIcons": false,
+            "supportHtml": false,
+            "supportAlertSyntax": false
+          },
+          "isConfirmed": {
+            "type": 1
+          },
+          "isComplete": true,
+          "source": {
+            "type": "internal",
+            "label": "Built-In"
+          },
+          "resultDetails": {
+            "input": "{\n  \"path\": \"C:\\\\ubk-repos\\\\product-support-agent\\\\Instructions.md\"\n}",
+            "inputLanguage": "json",
+            "output": [
+              {
+                "type": "embed",
+                "value": "\ndiff --git a/C:/ubk-repos/product-support-agent/Instructions.md b/C:/ubk-repos/product-support-agent/Instructions.md\nindex 0000000..0000000 100644\n--- a/C:/ubk-repos/product-support-agent/Instructions.md\n+++ b/C:/ubk-repos/product-support-agent/Instructions.md\n@@ -1,39 +1,39 @@\n # Product Support Agent #\n This repository contains a small AI-enabled application that demonstrates architecture judgment, secure production thinking, hands-on engineering depth, and the ability to move from prototype to an operable solution.\n \n ## Goal ##\n \n The Goals is to use the following URLs which contains the Product list page and the search results API page as the sources and to design and build a working AI agent (select any model) to answer questions about supported products and their resources. \n \n 1. URLs https://my.opentext.com/support/products/ and API https://my.opentext.com/api/web/support/search-results?start=1&maxResults=5&text=*. If none of these works then load from the feed https://my.opentext.com/api/web/feed/product. For each product there is a page hosted under https://my.opentext.com/support/products/{ProductCode} location where ProductCode is the \"slug\" property of the feed data. Each of the product support page contains knowledge articles and supporting documentations, retrieve the details from those documenation unless they are protected by authentication.\n \n 2. Future requirement is to expand the agentic capability to the full support and service management system (OpenText Service Management). \n \n 3. Produce a concise architecture showing application components, identity and access, data flow, model interaction, trust boundaries, deployment, monitoring, and support ownership. \n \n 4. Document architecture decisions, security and privacy considerations, assumptions, risks, trade-offs, production-readiness gaps, and a phased path from proof of concept to production.\n \n ## Architecture Considerations ##\n \n 1. I as a Senior AI Solution Architect is looking for a decoupled ingestion, Retrieval Tooling and Agentic Orchestration Architecture that would retrieve/ fetch the product listing and queries the search API with controlled pagination. It would honor the HTTP response types and act accordinlgy, as an example, if the status code is HTTP 401 then it would avoid loading the page since this demonstration should work with anonymous access alone. OpenText has multiple product knowlede/ documentations which are protected by Customer Authorization, I would skil thopse records entrirely after recording at a central place about the reason. The ingestion should run through a queue, where the entries would be loaded from the Product list, each queue item would store only one product detail, and the ingestion worker would take one item from the queue, fetch the relevant details from the supporting URLs, run the details through embedding and store it in the knowledge source. It should record the details about the operation, especially whether it is a success or failure. For this MVP I would like to select 100 products randomly from the Product list and have only those 100 ingested. I will keep the list of 100 selected product so that I can surface the names to the chat agent which will be used by the endusers during the demonstration. I would clearly indicate that this is a demo process and only the list of 100 products got ingested to avoid requiring additional infrastructure and also to avoid putting load on OpenText's infrastructure.\n 2. If the product list is empty then the ingestion and normalization process would terminate. If there is a rate limitation with HTTP 429 status code then I would check for suggested retry time and perform exponential backoff before retrying.\n 3. The ingestion process should normalize the results into a canonical document schema for idempotent operations and delta updates for subsequent runs.\n 4. I need a hybrid search implementaion since the endusers could search with keyword/ metadata and also through semantic meanings\n 5. I would keep the source URLs so that I can present the actual URL with the search results in the agent.\n 6. For the agent and orchestration layer I will use an LLM with structured tool/ function calling plus retrieval augmented generation (RAG)\n 7. I would enforce strict context grounding, prompt injection related defense and PII/SPI/secret redaction from logs.\n 8. I don't want to show the past search histories to the enduser in this MVP but I would retail all the logs/ traces/ queries/ responses from all user sessions so that those can be reviewed later to improve the experience and detect malicious attempts.\n 9. I would keep the embedding and a chat completion model behind a gateway so that I can change the models in the future without changing the code.\n 10. I need every claim about a supported product or resource to map back to a retrieved source URL/ID and do not want the model to invent links or resource ever.\n 11. I need to include OpenTelemetry based AI request tracing, logging and metrics, which would be sent to any capable product like Aspire or Arize Phoenix.\n 12. I need an offline evaluation dataset to test factual grounding, citation accuracy etc.\n 13. I would include AI Gateway, managed identity based authentication, automated build, deployment, code quality analysis, SAST, DAST and IAST validations.\n 14. I also need to prepare a phased path to take this proof of concept demonstration to Production where real users can use it. This will have usability, accessibility etc. validations to ensure that I am building a product what will be helpful to the endusers and not just a working prototype that works but not useful for anyone.\n 15. For each of the phases I want end to end testability. Each of the steps should be testable independently and completion of a phase require successful execution of the relevant test cases. I want unit test, integration test, end to end test etc.\n 16. I want to ensure that the project repository has proper structure so that it's easily readable and understandable by my other colleagues. All architectural decisions are logged, appropriate architecture documentations are created with architecture diagrams created in mermaid syntax.\n 17. As per technology stack, I want the use Chainlit for the UI which will host the chat interface used by the users. I need FAST API written in python in the backend supporting the front-end. I want to create the AI agents in Python based on Microsoft Agent framework, for the data store I would use a NoSQL database like MongoDB for local and Azure Cosmos DB with Mongo API for the cloud, for the Vector store I would use Postgres with appropriate extension in my local and Azure AI Search for the cloud deployment. For the AI Gateway, I will use LiteLLM locally and Azure APIM Gateway for the cloud deployment. For Azure cloud deployment I will use system assigned managemed identity based authentication. Review the requirement for a caching tier, in which case I will use Redis locally and Azure Cachec for Redis for the cloud. I will store the secret in Azure Key Vault. For queue I will use Azurite for the queue emulator and Azure Storage Queue for the cloud deployment. I have Podman installed locally,hence use Podman instead of docker for local development.\n 18. I need to create a infrastructure deployment pipeline based on Bicep, which will have infrastructure as code scripts for the entire cloud infrastructure. This will include a Azure Virtual Network, Azure APIM will be deployed in external mode with VENT integration. All the backed services, agents, data store, queue etc. will be under the VENT with appropriate subnets. I will need Log Analytics workspace and Azure Monitor for the logs/ metrics and traces.\n 19. I will need a code build pipeline for the UI, backend API, AI Agents\n 20. I will need a code deployment pipeline for the UI, backend API and AI Agents\n 21. To host the backend use Azure Container Apps.\n 22. Use GitHub Actions for the build and deployment pipelines\n",
+                "isText": true,
+                "mimeType": "text/plain"
+              }
+            ],
+            "isError": false
+          },
+          "toolCallId": "call_1f655952c48f49ed8f35495c9e9a2cfd",
+          "toolId": "view",
+          "summary": {
+            "kind": "read",
+            "resources": [
+              {
+                "uri": {
+                  "$mid": 1,
+                  "path": "/C:/ubk-repos/product-support-agent/Instructions.md",
+                  "scheme": "file"
+                }
+              }
+            ]
+          },
+          "startedAt": 1795245851920,
+          "completedAt": 1795245853062
+        },
+        {
+          "kind": "toolInvocationSerialized",
+          "invocationMessage": {
+            "value": "Read [](file:///c%3A/Users/devuser/AppData/Roaming/Code/agentPlugins/vscode-synced-customization-agent-host-copilotcli-18315769/1308647004/rules/markdown.instructions.md)",
+            "isTrusted": false,
+            "supportThemeIcons": false,
+            "supportHtml": false,
+            "supportAlertSyntax": false
+          },
+          "pastTenseMessage": {
+            "value": "Read [](file:///c%3A/Users/devuser/AppData/Roaming/Code/agentPlugins/vscode-synced-customization-agent-host-copilotcli-18315769/1308647004/rules/markdown.instructions.md)",
+            "isTrusted": false,
+            "supportThemeIcons": false,
+            "supportHtml": false,
+            "supportAlertSyntax": false
+          },
+          "isConfirmed": {
+            "type": 1
+          },
+          "isComplete": true,
+          "source": {
+            "type": "internal",
+            "label": "Built-In"
+          },
+          "resultDetails": {
+            "input": "{\n  \"path\": \"C:\\\\Users\\\\devuser\\\\AppData\\\\Roaming\\\\Code\\\\agentPlugins\\\\vscode-synced-customization-agent-host-copilotcli-18315769\\\\1308647004\\\\rules\\\\markdown.instructions.md\"\n}",
+            "inputLanguage": "json",
+            "output": [
+              {
+                "type": "embed",
+                "value": "\ndiff --git a/C:/Users/devuser/AppData/Roaming/Code/agentPlugins/vscode-synced-customization-agent-host-copilotcli-18315769/1308647004/rules/markdown.instructions.md b/C:/Users/devuser/AppData/Roaming/Code/agentPlugins/vscode-synced-customization-agent-host-copilotcli-18315769/1308647004/rules/markdown.instructions.md\nindex 0000000..0000000 100644\n--- a/C:/Users/devuser/AppData/Roaming/Code/agentPlugins/vscode-synced-customization-agent-host-copilotcli-18315769/1308647004/rules/markdown.instructions.md\n+++ b/C:/Users/devuser/AppData/Roaming/Code/agentPlugins/vscode-synced-customization-agent-host-copilotcli-18315769/1308647004/rules/markdown.instructions.md\n@@ -1,286 +1,286 @@\n ---\n description: \"Required instructions for creating or editing any Markdown (.md) files\"\n applyTo: '**/*.md'\n ---\n # Markdown Instructions\n \n These instructions define the Markdown style guide enforced by markdownlint in this codebase. Follow them when creating or updating any `.md` file here. Examples are included in XML-style blocks that downstream tools can extract.\n \n ## Scope\n \n * Applies to all Markdown files in this codebase excluding files with `<!-- markdownlint-disable-file -->`.\n * Mirrors the active configuration in `.markdownlint.json`.\n * When in doubt, prefer clarity and consistency. Automated fixes are acceptable if they preserve intent.\n \n ## General conventions\n \n * Use UTF-8 and plain ASCII punctuation unless content requires otherwise.\n * Prefer descriptive headings and concise paragraphs; avoid trailing or leading extra spaces.\n * Keep lines reasonably short for readability; wrap where sensible without breaking URLs or code.\n \n ## Headings\n \n * Start documents with a single level-1 heading that acts as the title when appropriate.\n * Increase heading levels by one at a time; do not skip levels.\n * Use a consistent heading style per file. Prefer ATX style (`#`, `##`, `###`, ...) for new content.\n * Do not indent headings; they must start at column 1.\n * Surround each heading with a blank line above and below (except at file start/end).\n * Do not end headings with punctuation such as `. , ; : !` or their full-width variants.\n * Avoid duplicate headings under the same parent section; make them unique.\n * Do NOT use an H1 heading when YAML frontmatter contains a `title:` field. The frontmatter title satisfies MD025 and MD041. Start content with H2 or below after frontmatter. If no frontmatter exists, begin the file with a top-level heading.\n * Use exactly one space after the `#` characters in headings; do not omit or use multiple spaces.\n * If you close ATX headings with trailing `#` characters, use a single space between the text and both the opening and closing hashes; do not use multiple spaces on either side.\n * Use only one top-level heading per document; subsequent sections must use lower levels.\n \n <!-- <example-headings> -->\n ```markdown\n # Title\n \n ## Section\n \n ### Subsection\n ```\n <!-- </example-headings> -->\n \n ## YAML Frontmatter\n \n * All markdown files MUST include YAML frontmatter at the beginning of the file\n * Frontmatter MUST be the first content in the file (before H1 heading)\n * Use triple-dash delimiters (---) on separate lines to wrap frontmatter YAML\n * Frontmatter provides machine-readable metadata for validation, SEO, and site generation\n * Do NOT use an H1 heading when frontmatter includes a `title:` field; the title in frontmatter acts as the document title per MD025/MD041\n * Start document content with H2 or below when frontmatter contains a `title:` field\n \n ### Required Fields by File Type\n \n | File Type                                               | Required Fields          | Schema File                              |\n |---------------------------------------------------------|--------------------------|------------------------------------------|\n | Root community files (README.md, CONTRIBUTING.md, etc.) | `title`, `description`   | `root-community-frontmatter.schema.json` |\n | Documentation files (`docs/**/*.md`)                    | `title`, `description`   | `docs-frontmatter.schema.json`           |\n | Instruction files (`.github/**/*.instructions.md`)      | `description`, `applyTo` | `instruction-frontmatter.schema.json`    |\n | Agent files (`.github/**/*.agent.md`)                   | `description`            | `agent-frontmatter.schema.json`          |\n | Prompt files (`.github/**/*.prompt.md`)                 | `description`            | `prompt-frontmatter.schema.json`         |\n \n ### Recommended Fields\n \n * `author`: Author or team responsible for the content\n * `ms.date`: Last modified date in ISO 8601 format (YYYY-MM-DD)\n * `ms.topic`: Documentation topic type (overview, concept, tutorial, reference, how-to, troubleshooting)\n * `keywords`: Array of keywords for content categorization\n * `estimated_reading_time`: Positive integer (minutes)\n \n ### Date Format\n \n * MUST use ISO 8601 format: YYYY-MM-DD (e.g., `ms.date: 2025-11-15`)\n * Do NOT use MM/DD/YYYY, DD/MM/YYYY, or other formats\n \n ### Schema Validation\n \n * Schemas are located in `scripts/linting/schemas/`\n * Pattern-based mapping in `schema-mapping.json` determines which schema applies to each file\n * VS Code YAML extension (`redhat.vscode-yaml`) provides in-editor validation\n * Run validation: `npm run validate:frontmatter` or `pwsh scripts/linting/Validate-MarkdownFrontmatter.ps1`\n \n ### Schema Pattern Matching\n \n Files are validated against schemas based on glob pattern matching:\n \n * Patterns are evaluated in order from most specific to least specific\n * First matching pattern determines the schema\n * If no pattern matches, `base-frontmatter.schema.json` is used as default\n * Pattern syntax supports:\n   * `**` for recursive directory matching\n   * `*` for single path segment wildcard\n   * `|` for alternation (e.g., `README.md|CONTRIBUTING.md`)\n \n Pattern examples:\n \n * `.github/**/*.instructions.md` - All instruction files in .github directory tree\n * `docs/**/*.md` - All markdown files under docs directory\n * `README.md|CONTRIBUTING.md` - Exact filename match (alternation)\n \n ### Examples\n \n <!-- <example-frontmatter-docs> -->\n ```yaml\n ---\n title: Getting Started with HVE Core\n description: Quick setup guide for using HVE Core Copilot customizations in your projects\n author: Microsoft\n ms.date: 2025-11-15\n ms.topic: tutorial\n keywords:\n   - github copilot\n   - setup\n   - getting started\n estimated_reading_time: 5\n ---\n \n # Getting Started with HVE Core\n \n This guide shows you how to configure your project...\n ```\n <!-- </example-frontmatter-docs> -->\n \n <!-- <example-frontmatter-instructions> -->\n ```yaml\n ---\n description: \"Required instructions for creating or editing any Markdown (.md) files\"\n applyTo: '**/*.md'\n ---\n \n # Markdown Instructions\n \n These instructions define the Markdown style guide...\n ```\n <!-- </example-frontmatter-instructions> -->\n \n ## Lists\n \n * Use unordered list markers consistently across a file; for the same level, do not mix `*`, `+`, `-`.\n   * Try to always use `*` for unordered lists.\n   * Avoid using `-` and `+` for unordered lists unless the file already uses these.\n * Indent unordered sublist content by 2 spaces per level.\n * Keep indentation consistent for items at the same nesting level.\n * Use one space between any list marker and the list text for both ordered and unordered lists.\n * Surround lists with a blank line before and after (unless at file start/end).\n * For ordered lists, either use `1.` for all items or increment numerically; do not mix styles within a list. Leading zeros are allowed only when used consistently.\n \n <!-- <example-lists> -->\n ```markdown\n * Item 1\n * Item 2\n   * Nested item\n \n 1. Step\n 2. Step\n 3. Step\n ```\n <!-- </example-lists> -->\n \n ### Bullet point punctuation\n \n Follow professional editorial standards for bullet point punctuation consistency:\n \n * **Fragment bullet points** (short phrases, technical terms, simple commands): Do NOT end with periods.\n * **Complete sentence bullet points** (subject + verb constructions): End with periods.\n * Based on Google, Microsoft, and GitLab style guidelines\n \n <!-- <example-bullet-punctuation> -->\n ```markdown\n * Configuration file\n * API endpoint\n * User authentication\n * Enable debugging mode\n \n * This function validates the input parameters\n * The system processes requests asynchronously\n * Users can configure settings through the UI\n * When enabled, it provides detailed logging information\n ```\n <!-- </example-bullet-punctuation> -->\n \n ## Code blocks and code spans\n \n * Use fenced code blocks consistently (prefer triple backticks) and surround them with a blank line before and after. Use fenced code instead of indented code blocks.\n * Always specify a language for fenced code blocks; use `text` if no highlighting is desired.\n * Avoid tabs; use spaces everywhere. Do not include hard tab characters in code, lists, or text.\n * Do not add spaces just inside backticks of code spans; write `` `code` `` not `` ` code ` ``.\n * For shell examples, do not prefix commands with `$` unless you also show the command output; prefer copy-pasteable commands without the prompt.\n * Use backticks for code fences consistently across the repository; do not use tildes.\n \n <!-- <example-code> -->\n ````markdown\n ```bash\n # Good\n echo \"Hello\"\n ```\n \n Some inline `code` here.\n ````\n <!-- </example-code> -->\n \n ## Links and images\n \n * Do not reverse link syntax; write `[text](url)`.\n * Do not use empty links like `[]()` or `(#)`; always provide a valid destination.\n * Avoid bare URLs; wrap them in angle brackets like `<https://example.com>` or make them proper links with text.\n * Ensure link fragments match generated heading IDs (kebab-case, lower-case). Use `<a id=\"...\">` when needed.\n * Provide alternate text for all images. If an image must be hidden from assistive tech, use `aria-hidden=\"true\"` in HTML.\n * Keep spaces out of link text brackets: `[text]`, not `[ text ]`.\n * Use a consistent link/image style within a document. Inline and autolink styles are allowed. When using full `[text][label]` or collapsed `[label][]` references, ensure the corresponding `[label]: URL` is defined. Remove unused or duplicate reference definitions.\n * If literal bracketed text is intended (not a link), escape the brackets as `\\[text\\]`.\n \n <!-- <example-links-images> -->\n ```markdown\n See <https://example.com> and [Docs](https://example.com/docs).\n \n ![Diagram](./diagram.png)\n ```\n <!-- </example-links-images> -->\n \n ## Spacing and blank lines\n \n * Limit paragraph and prose lines to approximately 500 characters; keep headings under 80 characters.\n * Do not add trailing spaces at the end of lines except when intentionally forcing a hard line break; when forcing breaks, use exactly two spaces.\n * Do not use multiple consecutive blank lines; keep at most one in a row.\n * Surround fenced code blocks, headings, lists, and tables with a blank line before and after (unless at file start/end).\n * Files must end with a single newline; no extra blank lines at EOF.\n * Do not break long URLs or long words to satisfy line length. Headings should honor their shorter limit; tables are exempt from line length checks. Code blocks may exceed normal line length; avoid wrapping code for width alone.\n \n ## Blockquotes\n \n * Use a single space after the `>` marker; avoid multiple spaces.\n * Do not place a bare blank line between adjacent blockquotes unless they are the same quote (then include `>` on the blank line to continue it).\n * Inside blockquotes, apply the same list and code rules; when creating tight lists with code fences inside blockquotes, consider whether a blank line is required for your target renderer.\n \n <!-- <example-blockquotes> -->\n ```markdown\n > Quoted text continues\n >\n > Same quote after a blank line.\n ```\n <!-- </example-blockquotes> -->\n \n ## Horizontal rules\n \n * Use one horizontal rule style consistently within a document. Prefer `---`.\n \n ## Emphasis\n \n * Use a consistent style for emphasis and strong emphasis throughout a document. Prefer `*italic*` and `**bold**` for new content.\n * Do not put spaces inside emphasis markers: `**bold**`, not `** bold **`.\n * Do not use emphasis-only lines as section separators; use proper headings instead.\n  * Avoid emphasis within words using underscores; prefer asterisks for word-internal emphasis if absolutely necessary.\n \n ## Tables\n \n * Surround tables with a blank line before and after (unless at file start/end).\n * Use a consistent pipe style; prefer leading and trailing pipes on all rows.\n * Ensure every row has the same number of cells as the header.\n * Keep header and delimiter rows aligned in column count so the table is recognized by renderers.\n * Use aligned column style: all pipe characters must align vertically across all rows. Pad cell content with spaces so pipes line up.\n \n <!-- <example-tables> -->\n ```markdown\n | Column A | Column B | Column C |\n |----------|----------|----------|\n | Short    | Medium   | Longer   |\n | A        | BB       | CCC      |\n ```\n <!-- </example-tables> -->\n \n ## Miscellaneous\n \n * Do not include inline HTML unless necessary; if used, limit to explicitly allowed elements like `<details>` and `<summary>` in this repository.\n * Fenced code blocks must declare a language; use a recognized language name. If no highlighting is desired, use `text`.\n * Follow proper capitalization for product and technology names used in this repository (e.g., \"GitHub\", \"JavaScript\").\n  * Avoid using inline HTML when a Markdown equivalent exists. If an inline HTML element is necessary and allowed, keep it minimal and well-formed.\n * Ensure files end with exactly one trailing newline character.\n * Use a consistent fence marker for code blocks (backticks) across a file.\n * Use a consistent emphasis style throughout a file (prefer asterisks for both italic and bold).\n * Validate intra-document link fragments; they must match the generated IDs of headings or explicitly provided anchors. Prefer lower-case, dash-separated fragments.\n * When using reference-style links or images, ensure the referenced labels are defined. Remove any unused or duplicate reference definitions. Keep the special checkbox syntax `[x]` intact.\n * Link and image styles allowed: autolinks `<https://...>`, inline `[text](url)`, and reference `[text][label]`/`[label][]`. Avoid bare URLs in text; prefer autolink syntax. Avoid inline links where the link text equals the same absolute URL with no title; prefer autolink.\n * For tables, apply a consistent leading/trailing pipe style; prefer both leading and trailing pipes. Ensure all rows have the same number of cells as the header.\n \n",
+                "isText": true,
+                "mimeType": "text/plain"
+              }
+            ],
+            "isError": false
+          },
+          "toolCallId": "call_9c3b42ad5be344648d3f5dcf6cf6528a",
+          "toolId": "view",
+          "summary": {
+            "kind": "read",
+            "resources": [
+              {
+                "uri": {
+                  "$mid": 1,
+                  "path": "/C:/Users/devuser/AppData/Roaming/Code/agentPlugins/vscode-synced-customization-agent-host-copilotcli-18315769/1308647004/rules/markdown.instructions.md",
+                  "scheme": "file"
+                }
+              }
+            ]
+          },
+          "startedAt": 1795245851930,
+          "completedAt": 1795245854450
+        },
+        {
+          "kind": "toolInvocationSerialized",
+          "invocationMessage": {
+            "value": "Read [](file:///c%3A/Users/devuser/AppData/Roaming/Code/agentPlugins/vscode-synced-customization-agent-host-copilotcli-18315769/1308647004/rules/writing-style.instructions.md)",
+            "isTrusted": false,
+            "supportThemeIcons": false,
+            "supportHtml": false,
+            "supportAlertSyntax": false
+          },
+          "pastTenseMessage": {
+            "value": "Read [](file:///c%3A/Users/devuser/AppData/Roaming/Code/agentPlugins/vscode-synced-customization-agent-host-copilotcli-18315769/1308647004/rules/writing-style.instructions.md)",
+            "isTrusted": false,
+            "supportThemeIcons": false,
+            "supportHtml": false,
+            "supportAlertSyntax": false
+          },
+          "isConfirmed": {
+            "type": 1
+          },
+          "isComplete": true,
+          "source": {
+            "type": "internal",
+            "label": "Built-In"
+          },
+          "resultDetails": {
+            "input": "{\n  \"path\": \"C:\\\\Users\\\\devuser\\\\AppData\\\\Roaming\\\\Code\\\\agentPlugins\\\\vscode-synced-customization-agent-host-copilotcli-18315769\\\\1308647004\\\\rules\\\\writing-style.instructions.md\"\n}",
+            "inputLanguage": "json",
+            "output": [
+              {
+                "type": "embed",
+                "value": "\ndiff --git a/C:/Users/devuser/AppData/Roaming/Code/agentPlugins/vscode-synced-customization-agent-host-copilotcli-18315769/1308647004/rules/writing-style.instructions.md b/C:/Users/devuser/AppData/Roaming/Code/agentPlugins/vscode-synced-customization-agent-host-copilotcli-18315769/1308647004/rules/writing-style.instructions.md\nindex 0000000..0000000 100644\n--- a/C:/Users/devuser/AppData/Roaming/Code/agentPlugins/vscode-synced-customization-agent-host-copilotcli-18315769/1308647004/rules/writing-style.instructions.md\n+++ b/C:/Users/devuser/AppData/Roaming/Code/agentPlugins/vscode-synced-customization-agent-host-copilotcli-18315769/1308647004/rules/writing-style.instructions.md\n@@ -1,175 +1,175 @@\n ---\n description: \"Required writing style conventions for voice, tone, and language in all markdown content\"\n applyTo: '**/*.md'\n ---\n \n # Writing Style Instructions\n \n These instructions define writing style, voice, and tone conventions for markdown content. Apply these conventions to maintain consistency and authenticity across documentation.\n \n ## Voice and Tone\n \n Writing voice adapts to context while maintaining professionalism:\n \n * Maintain a clear, professional voice while adjusting formality to suit context\n * Write with authority while remaining accessible (expert without condescension)\n * Adapt tone and structure to match purpose and audience\n * Preserve clarity regardless of complexity\n \n For community-facing communication patterns, follow the guidelines in `community-interaction.instructions.md`.\n \n ### Formal Contexts\n \n Use these conventions for strategic documents, architecture decisions, and official communications:\n \n * Write in an authoritative yet accessible style\n * Use structured sections with precise vocabulary\n * Employ inclusive pronouns (\"we\", \"our\") to speak for the team\n * Maintain professionalism while remaining approachable\n \n ### Instructional Contexts\n \n Use these conventions for guides, tutorials, how-tos, and developer-facing content:\n \n * Adopt a warmer, more direct tone\n * Address the reader as \"you\" to create engagement\n * Use first-person reflections (\"I\") when sharing rationale or experience\n * Keep guidance actionable and concrete\n \n ## Language and Vocabulary\n \n Vocabulary choices affect clarity and reader engagement:\n \n * Use rich, varied vocabulary to avoid repetitive word choices within close proximity\n * Choose precise terms over vague alternatives; prefer specificity\n * Match vocabulary complexity to the audience without sacrificing accuracy\n * Avoid jargon unless the audience expects it; define terms when introducing them\n \n ## Sentence Structure\n \n Sentence variety improves readability:\n \n * Vary sentence length deliberately\n * Use longer, more complex sentences for narrative explanations and context-setting\n * Use shorter, punchy sentences for step-by-step instructions and emphasis\n * Maintain clarity regardless of sentence complexity\n * Avoid run-on sentences; break complex ideas into digestible parts\n * Use parallel structure in lists and comparisons\n \n ## Patterns to Avoid\n \n Avoid these common patterns that reduce clarity and create clutter.\n \n ### Em Dashes\n \n <!-- markdownlint-disable-next-line search-replace -->\n Do not use em dashes (—) for parenthetical statements, explanations, or dramatic pauses. Use these alternatives instead:\n \n | Instead of Em Dash  | Use This    | Example                                         |\n |---------------------|-------------|-------------------------------------------------|\n | Parenthetical aside | Commas      | \"The system, when enabled, logs all events.\"    |\n | Explanation         | Colons      | \"One option remains: refactor the module.\"      |\n | Emphasis            | Periods     | Create a new sentence when emphasizing a point. |\n | Supplementary info  | Parentheses | Use for truly supplementary information.        |\n \n ### Bolded-Prefix List Items\n \n Do not format lists with bolded terms followed by descriptions.\n \n ```markdown\n <!-- Avoid this pattern -->\n * **Configuration**: Set up the environment variables\n * **Deployment**: Push to production\n \n <!-- Use this pattern instead -->\n * Set up environment variables for configuration\n * Push to production for deployment\n ```\n \n Use plain lists, proper headings, or description lists instead.\n \n ### Hedging and Filler\n \n Remove these phrases that add no value:\n \n * \"It's worth noting that...\" (delete, state directly)\n * \"It should be mentioned...\" (delete, state directly)\n * \"simply\", \"easily\", \"just\" (delete)\n * \"robust\", \"powerful\", \"seamless\" (use specific descriptions)\n \n ### Self-Referential Writing\n \n Avoid meta-commentary about the document itself. Start with the content directly instead of phrases like \"This document explains...\" or \"This page will show you...\"\n \n ## Structural Patterns\n \n Organize content to help readers find and understand information:\n \n * Use structured sections with clear headings to organize content logically\n * Lead with context before diving into details\n * Group related information together\n * Provide transitions between major sections when helpful\n \n ## Callouts and Alerts\n \n Use GitHub-flavored markdown alerts for important callouts. Each alert type serves a specific purpose:\n \n | Alert          | Purpose                                                     |\n |----------------|-------------------------------------------------------------|\n | `[!NOTE]`      | Useful information users should know when skimming          |\n | `[!TIP]`       | Helpful advice for doing things better or more easily       |\n | `[!IMPORTANT]` | Key information users need to achieve their goal            |\n | `[!WARNING]`   | Urgent info needing immediate attention to avoid problems   |\n | `[!CAUTION]`   | Advises about risks or negative outcomes of certain actions |\n \n ```markdown\n > [!NOTE]\n > Useful information that users should know, even when skimming content.\n \n > [!TIP]\n > Helpful advice for doing things better or more easily.\n \n > [!IMPORTANT]\n > Key information users need to know to achieve their goal.\n \n > [!WARNING]\n > Urgent info that needs immediate user attention to avoid problems.\n \n > [!CAUTION]\n > Advises about risks or negative outcomes of certain actions.\n ```\n \n ## Pronoun Usage\n \n Match pronouns to context and purpose:\n \n | Context                    | Preferred Pronouns       | Example                                                          |\n |----------------------------|--------------------------|------------------------------------------------------------------|\n | Team/organizational voice  | \"we\", \"our\"              | \"We recommend using...\"                                          |\n | Instructional/tutorial     | \"you\", \"your\"            | \"You can configure...\"                                           |\n | Personal insight/rationale | \"I\"                      | \"I prefer this approach because...\"                              |\n | Neutral/technical          | Impersonal constructions | \"This configuration enables...\"                                  |\n | Community interaction      | \"we\", \"you\"              | \"Thank you for reporting this. We'll investigate and follow up.\" |\n \n ## Clarity Principles\n \n Clarity takes priority while balancing brevity:\n \n * Prioritize clarity over brevity, but aim for both when possible\n * Ensure complex ideas remain understandable through structure and word choice\n * Use examples to illustrate abstract concepts\n * Front-load important information; do not bury the lede\n \n ## Adaptability\n \n Adaptability is the hallmark of effective writing style. Shift register based on content purpose:\n \n | Formality Level | Use For                                                          | Characteristics                    |\n |-----------------|------------------------------------------------------------------|------------------------------------|\n | High            | Strategic plans, executive summaries, architecture decisions     | Structured, precise, authoritative |\n | Medium          | Technical documentation, READMEs, contributing guides            | Clear, professional, balanced      |\n | Lower           | Internal notes, casual updates, quick references                 | Direct, concise, conversational    |\n | Community       | Issue/PR comments, contributor acknowledgments, closure messages | Warm, appreciative, scope-focused  |\n \n Regardless of formality level, maintain professionalism and precision.\n \n",
+                "isText": true,
+                "mimeType": "text/plain"
+              }
+            ],
+            "isError": false
+          },
+          "toolCallId": "call_21a1ab4e331840a7abe1a407092b5550",
+          "toolId": "view",
+          "summary": {
+            "kind": "read",
+            "resources": [
+              {
+                "uri": {
+                  "$mid": 1,
+                  "path": "/C:/Users/devuser/AppData/Roaming/Code/agentPlugins/vscode-synced-customization-agent-host-copilotcli-18315769/1308647004/rules/writing-style.instructions.md",
+                  "scheme": "file"
+                }
+              }
+            ]
+          },
+          "startedAt": 1795245851933,
+          "completedAt": 1795245855729
+        },
+        {
+          "value": "I’ll turn the requirements into a review-gated plan, calling out unresolved architecture choices instead of treating them as approved. First I’m checking the existing workspace layout so the proposed structure fits what is already there.",
+          "isTrusted": false,
+          "supportThemeIcons": false,
+          "supportHtml": false
+        },
+        {
+          "kind": "toolInvocationSerialized",
+          "invocationMessage": {
+            "value": "Read [](file:///c%3A/ubk-repos/product-support-agent)",
+            "isTrusted": false,
+            "supportThemeIcons": false,
+            "supportHtml": false,
+            "supportAlertSyntax": false
+          },
+          "pastTenseMessage": {
+            "value": "Read [](file:///c%3A/ubk-repos/product-support-agent)",
+            "isTrusted": false,
+            "supportThemeIcons": false,
+            "supportHtml": false,
+            "supportAlertSyntax": false
+          },
+          "isConfirmed": {
+            "type": 1
+          },
+          "isComplete": true,
+          "source": {
+            "type": "internal",
+            "label": "Built-In"
+          },
+          "resultDetails": {
+            "input": "{\n  \"path\": \"C:\\\\ubk-repos\\\\product-support-agent\"\n}",
+            "inputLanguage": "json",
+            "output": [
+              {
+                "type": "embed",
+                "value": "\ndiff --git a/C:/ubk-repos/product-support-agent b/C:/ubk-repos/product-support-agent\ncreate file mode 100644\nindex 0000000..0000000\n--- a/dev/null\n+++ b/C:/ubk-repos/product-support-agent\n@@ -1,0 +1,1 @@\n Instructions.md\n",
+                "isText": true,
+                "mimeType": "text/plain"
+              }
+            ],
+            "isError": false
+          },
+          "toolCallId": "call_06f88a7cd342403590da3c829d6962f5",
+          "toolId": "view",
+          "summary": {
+            "kind": "list",
+            "resources": [
+              {
+                "uri": {
+                  "$mid": 1,
+                  "path": "/C:/ubk-repos/product-support-agent",
+                  "scheme": "file"
+                }
+              }
+            ]
+          },
+          "startedAt": 1795245862420,
+          "completedAt": 1795245863590
+        },
+        {
+          "kind": "toolInvocationSerialized",
+          "invocationMessage": {
+            "value": "Read [](file:///c%3A/ubk-repos/product-support-agent)",
+            "isTrusted": false,
+            "supportThemeIcons": false,
+            "supportHtml": false,
+            "supportAlertSyntax": false
+          },
+          "pastTenseMessage": {
+            "value": "Find files matching `**/*.md`",
+            "isTrusted": false,
+            "supportThemeIcons": false,
+            "supportHtml": false,
+            "supportAlertSyntax": false
+          },
+          "isConfirmed": {
+            "type": 1
+          },
+          "isComplete": true,
+          "source": {
+            "type": "internal",
+            "label": "Built-In"
+          },
+          "toolSpecificData": {
+            "kind": "search"
+          },
+          "toolCallId": "call_bf221afe1153490aa3b52238318a768c",
+          "toolId": "glob",
+          "summary": {
+            "kind": "search",
+            "queries": [
+              "**/*.md"
+            ],
+            "searchKind": "files"
+          },
+          "startedAt": 1795245862428,
+          "completedAt": 1795245864711
+        },
+        {
+          "kind": "toolInvocationSerialized",
+          "invocationMessage": {
+            "value": "Read [](file:///c%3A/ubk-repos/product-support-agent)",
+            "isTrusted": false,
+            "supportThemeIcons": false,
+            "supportHtml": false,
+            "supportAlertSyntax": false
+          },
+          "pastTenseMessage": {
+            "value": "Find files matching `**/*.{py,yml,yaml,toml,json}`",
+            "isTrusted": false,
+            "supportThemeIcons": false,
+            "supportHtml": false,
+            "supportAlertSyntax": false
+          },
+          "isConfirmed": {
+            "type": 1
+          },
+          "isComplete": true,
+          "source": {
+            "type": "internal",
+            "label": "Built-In"
+          },
+          "toolSpecificData": {
+            "kind": "search"
+          },
+          "toolCallId": "call_b5a4a10e4c8d4fa58ec8c216957c4ecc",
+          "toolId": "glob",
+          "summary": {
+            "kind": "search",
+            "queries": [
+              "**/*.{py,yml,yaml,toml,json}"
+            ],
+            "searchKind": "files"
+          },
+          "startedAt": 1795245862432,
+          "completedAt": 1795245865836
+        },
+        {
+          "kind": "toolInvocationSerialized",
+          "presentation": "hidden",
+          "invocationMessage": {
+            "value": "Create [](file:///c%3A/ubk-repos/product-support-agent/docs/implementation-plan.md)",
+            "isTrusted": false,
+            "supportThemeIcons": false,
+            "supportHtml": false,
+            "supportAlertSyntax": false
+          },
+          "pastTenseMessage": {
+            "value": "Edit [](file:///c%3A/ubk-repos/product-support-agent/docs/implementation-plan.md)",
+            "isTrusted": false,
+            "supportThemeIcons": false,
+            "supportHtml": false,
+            "supportAlertSyntax": false
+          },
+          "isConfirmed": {
+            "type": 1
+          },
+          "isComplete": true,
+          "source": {
+            "type": "internal",
+            "label": "Built-In"
+          },
+          "toolCallId": "custom_call_6ed1860828e04e0ab9f8e0ec935efde4",
+          "toolId": "apply_patch",
+          "summary": {
+            "kind": "edit",
+            "resources": [
+              {
+                "uri": {
+                  "$mid": 1,
+                  "external": "file:///c%3A/ubk-repos/product-support-agent/docs/implementation-plan.md",
+                  "path": "/c:/ubk-repos/product-support-agent/docs/implementation-plan.md",
+                  "scheme": "file"
+                }
+              }
+            ]
+          },
+          "startedAt": 1795245880321,
+          "completedAt": 1795245930152
+        },
+        {
+          "kind": "externalEdit",
+          "uri": {
+            "$mid": 1,
+            "fsPath": "c:\\ubk-repos\\product-support-agent\\docs\\implementation-plan.md",
+            "_sep": 1,
+            "external": "file:///c%3A/ubk-repos/product-support-agent/docs/implementation-plan.md",
+            "path": "/c:/ubk-repos/product-support-agent/docs/implementation-plan.md",
+            "scheme": "file"
+          },
+          "editKind": "edit",
+          "beforeContentUri": {
+            "$mid": 1,
+            "path": "/c:/ubk-repos/product-support-agent/docs/implementation-plan.md",
+            "scheme": "vscode-agent-host",
+            "authority": "local",
+            "query": "_ah=eyJzY2hlbWUiOiJzZXNzaW9uLWRiIiwicXVlcnkiOiJ7XCJzZXNzaW9uVXJpXCI6XCJhaHAtc2Vzc2lvbjovMWQ1ZTQ5ZDgtYmZmZS00ZTNkLWFlOGYtNmY1ZWQ4OGRlODljXCIsXCJ0b29sQ2FsbElkXCI6XCJjdXN0b21fY2FsbF82ZWQxODYwODI4ZTA0ZTBhYjlmOGUwZWM5MzVlZmRlNFwiLFwiZmlsZVBhdGhcIjpcImM6XFxcXHViay1yZXBvc1xcXFxwcm9kdWN0LXN1cHBvcnQtYWdlbnRcXFxcZG9jc1xcXFxpbXBsZW1lbnRhdGlvbi1wbGFuLm1kXCIsXCJwYXJ0XCI6XCJiZWZvcmVcIn0iLCJjb250ZW50UmVmIjp0cnVlLCJmaWxlVXJpIjoiZmlsZTovLy9jJTNBL3Viay1yZXBvcy9wcm9kdWN0LXN1cHBvcnQtYWdlbnQvZG9jcy9pbXBsZW1lbnRhdGlvbi1wbGFuLm1kIn0"
+          },
+          "afterContentUri": {
+            "$mid": 1,
+            "path": "/c:/ubk-repos/product-support-agent/docs/implementation-plan.md",
+            "scheme": "vscode-agent-host",
+            "authority": "local",
+            "query": "_ah=eyJzY2hlbWUiOiJzZXNzaW9uLWRiIiwicXVlcnkiOiJ7XCJzZXNzaW9uVXJpXCI6XCJhaHAtc2Vzc2lvbjovMWQ1ZTQ5ZDgtYmZmZS00ZTNkLWFlOGYtNmY1ZWQ4OGRlODljXCIsXCJ0b29sQ2FsbElkXCI6XCJjdXN0b21fY2FsbF82ZWQxODYwODI4ZTA0ZTBhYjlmOGUwZWM5MzVlZmRlNFwiLFwiZmlsZVBhdGhcIjpcImM6XFxcXHViay1yZXBvc1xcXFxwcm9kdWN0LXN1cHBvcnQtYWdlbnRcXFxcZG9jc1xcXFxpbXBsZW1lbnRhdGlvbi1wbGFuLm1kXCIsXCJwYXJ0XCI6XCJhZnRlclwifSIsImNvbnRlbnRSZWYiOnRydWUsImZpbGVVcmkiOiJmaWxlOi8vL2MlM0EvdWJrLXJlcG9zL3Byb2R1Y3Qtc3VwcG9ydC1hZ2VudC9kb2NzL2ltcGxlbWVudGF0aW9uLXBsYW4ubWQifQ"
+          },
+          "diff": {
+            "added": 359,
+            "removed": 0
+          },
+          "undoStopId": "custom_call_6ed1860828e04e0ab9f8e0ec935efde4"
+        },
+        {
+          "kind": "toolInvocationSerialized",
+          "invocationMessage": {
+            "value": "Read [](file:///c%3A/ubk-repos/product-support-agent/docs/implementation-plan.md)",
+            "isTrusted": false,
+            "supportThemeIcons": false,
+            "supportHtml": false,
+            "supportAlertSyntax": false
+          },
+          "pastTenseMessage": {
+            "value": "Read [](file:///c%3A/ubk-repos/product-support-agent/docs/implementation-plan.md)",
+            "isTrusted": false,
+            "supportThemeIcons": false,
+            "supportHtml": false,
+            "supportAlertSyntax": false
+          },
+          "isConfirmed": {
+            "type": 1
+          },
+          "isComplete": true,
+          "source": {
+            "type": "internal",
+            "label": "Built-In"
+          },
+          "resultDetails": {
+            "input": "{\n  \"path\": \"C:\\\\ubk-repos\\\\product-support-agent\\\\docs\\\\implementation-plan.md\"\n}",
+            "inputLanguage": "json",
+            "output": [
+              {
+                "type": "embed",
+                "value": "File too large to read at once (27.6 KB). Consider using the rg tool to search within the file, or view with view_range to read specific sections.",
+                "isText": true,
+                "mimeType": "text/plain"
+              }
+            ],
+            "isError": false
+          },
+          "toolCallId": "call_c42348b65c904ab4b6901dd5746f9400",
+          "toolId": "view",
+          "summary": {
+            "kind": "read",
+            "resources": [
+              {
+                "uri": {
+                  "$mid": 1,
+                  "path": "/C:/ubk-repos/product-support-agent/docs/implementation-plan.md",
+                  "scheme": "file"
+                }
+              }
+            ]
+          },
+          "startedAt": 1795245932022,
+          "completedAt": 1795245933572
+        },
+        {
+          "kind": "toolInvocationSerialized",
+          "invocationMessage": {
+            "value": "Read [](file:///c%3A/ubk-repos/product-support-agent/docs/implementation-plan.md)",
+            "isTrusted": false,
+            "supportThemeIcons": false,
+            "supportHtml": false,
+            "supportAlertSyntax": false
+          },
+          "pastTenseMessage": {
+            "value": "Search for `^(title:|description:|## |### Phase|## Scope explicitly deferred|\\| Topic \\|)`",
+            "isTrusted": false,
+            "supportThemeIcons": false,
+            "supportHtml": false,
+            "supportAlertSyntax": false
+          },
+          "isConfirmed": {
+            "type": 1
+          },
+          "isComplete": true,
+          "source": {
+            "type": "internal",
+            "label": "Built-In"
+          },
+          "toolSpecificData": {
+            "kind": "search"
+          },
+          "toolCallId": "call_a3b3b1006b7549739723bf1b510abf00",
+          "toolId": "rg",
+          "summary": {
+            "kind": "search",
+            "queries": [
+              "^(title:|description:|## |### Phase|## Scope explicitly deferred|\\| Topic \\|)"
+            ],
+            "searchKind": "text"
+          },
+          "startedAt": 1795245936005,
+          "completedAt": 1795245940083
+        },
+        {
+          "kind": "toolInvocationSerialized",
+          "invocationMessage": {
+            "value": "Read [](file:///c%3A/ubk-repos/product-support-agent/docs/implementation-plan.md)",
+            "isTrusted": false,
+            "supportThemeIcons": false,
+            "supportHtml": false,
+            "supportAlertSyntax": false
+          },
+          "pastTenseMessage": {
+            "value": "Read [](file:///c%3A/ubk-repos/product-support-agent/docs/implementation-plan.md), lines 1 to 75",
+            "isTrusted": false,
+            "supportThemeIcons": false,
+            "supportHtml": false,
+            "supportAlertSyntax": false
+          },
+          "isConfirmed": {
+            "type": 1
+          },
+          "isComplete": true,
+          "source": {
+            "type": "internal",
+            "label": "Built-In"
+          },
+          "resultDetails": {
+            "input": "{\n  \"path\": \"C:\\\\ubk-repos\\\\product-support-agent\\\\docs\\\\implementation-plan.md\",\n  \"view_range\": [\n    1,\n    75\n  ]\n}",
+            "inputLanguage": "json",
+            "output": [
+              {
+                "type": "embed",
+                "value": "\ndiff --git a/C:/ubk-repos/product-support-agent/docs/implementation-plan.md b/C:/ubk-repos/product-support-agent/docs/implementation-plan.md\nindex 0000000..0000000 100644\n--- a/C:/ubk-repos/product-support-agent/docs/implementation-plan.md\n+++ b/C:/ubk-repos/product-support-agent/docs/implementation-plan.md\n@@ -1,75 +1,75 @@\n ---\n title: Product Support Agent Implementation Plan\n description: Review-gated implementation plan for a product-support AI agent from discovery through production readiness\n author: Product Support Agent Team\n ms.date: 2026-11-21\n ms.topic: concept\n keywords:\n   - product support\n   - AI agent\n   - architecture\n   - implementation plan\n estimated_reading_time: 12\n ---\n \n ## Purpose and approval model\n \n This plan turns the requirements in [Instructions.md](../Instructions.md) into a staged, testable delivery path. It is a planning artifact only. No application code, infrastructure, pipelines, or folder structure is being created in this step.\n \n Each phase is a separate review gate. We will not begin a phase until you approve its scope, decisions, and exit criteria. A phase is complete only after its deliverables and relevant tests pass and you approve moving on.\n \n ## Product outcome\n \n Deliver a demonstrable support assistant that answers questions about a documented, explicitly selected set of 100 OpenText products. Responses must be grounded in anonymously accessible source material, cite the source URL for each product or resource claim, and clearly disclose the limited demo catalog. The architecture should provide a safe path to later customer validation and production without representing the MVP as a production service.\n \n The longer-term OpenText Service Management expansion is an architectural consideration, not MVP scope.\n \n ## Proposed repository structure\n \n Adopt a Python `src` layout and keep application code, tests, documentation, infrastructure, and automation distinct. The exact package boundaries and hosting split are Phase 0 decisions; this is a starting proposal, not an instruction to create all directories immediately.\n \n ```text\n product-support-agent/\n ├── docs/\n │   ├── architecture/\n │   │   ├── diagrams/\n │   │   └── decisions/\n │   ├── security/\n │   ├── operations/\n │   └── implementation-plan.md\n ├── src/\n │   ├── apps/\n │   │   ├── api/\n │   │   ├── chat/\n │   │   └── ingestion_worker/\n │   └── packages/\n │       ├── agent/\n │       ├── ingestion/\n │       ├── retrieval/\n │       └── shared/\n ├── tests/\n │   ├── unit/\n │   ├── integration/\n │   ├── end_to_end/\n │   ├── evaluation/\n │   └── fixtures/\n ├── infra/\n │   └── bicep/\n │       ├── modules/\n │       └── environments/\n ├── pipelines/\n │   └── scripts/\n ├── .github/\n │   └── workflows/\n ├── pyproject.toml\n ├── README.md\n └── Instructions.md\n ```\n \n Keep test data synthetic or explicitly approved. Do not commit credentials, customer data, scraped source content, generated secrets, or local state. Use `docs/architecture/decisions/` for accepted architecture decision records (ADRs), and retain Mermaid diagrams as text in `docs/architecture/diagrams/`.\n \n ## Target architecture to validate\n \n The proposed flow is:\n \n 1. A scheduled or manually started catalog process obtains the product list, selects and records a stable 100-product demo manifest, and publishes one product reference per queue message.\n",
+                "isText": true,
+                "mimeType": "text/plain"
+              }
+            ],
+            "isError": false
+          },
+          "toolCallId": "call_96e0104be15c41f9961eafc0ef9814eb",
+          "toolId": "view",
+          "summary": {
+            "kind": "read",
+            "resources": [
+              {
+                "uri": {
+                  "$mid": 1,
+                  "path": "/C:/ubk-repos/product-support-agent/docs/implementation-plan.md",
+                  "scheme": "file"
+                }
+              }
+            ]
+          },
+          "startedAt": 1795245936017,
+          "completedAt": 1795245937402
+        },
+        {
+          "kind": "toolInvocationSerialized",
+          "invocationMessage": {
+            "value": "Read [](file:///c%3A/ubk-repos/product-support-agent/docs/implementation-plan.md)",
+            "isTrusted": false,
+            "supportThemeIcons": false,
+            "supportHtml": false,
+            "supportAlertSyntax": false
+          },
+          "pastTenseMessage": {
+            "value": "Read [](file:///c%3A/ubk-repos/product-support-agent/docs/implementation-plan.md), lines 225 to 320",
+            "isTrusted": false,
+            "supportThemeIcons": false,
+            "supportHtml": false,
+            "supportAlertSyntax": false
+          },
+          "isConfirmed": {
+            "type": 1
+          },
+          "isComplete": true,
+          "source": {
+            "type": "internal",
+            "label": "Built-In"
+          },
+          "resultDetails": {
+            "input": "{\n  \"path\": \"C:\\\\ubk-repos\\\\product-support-agent\\\\docs\\\\implementation-plan.md\",\n  \"view_range\": [\n    225,\n    320\n  ]\n}",
+            "inputLanguage": "json",
+            "output": [
+              {
+                "type": "embed",
+                "value": "\ndiff --git a/C:/ubk-repos/product-support-agent/docs/implementation-plan.md b/C:/ubk-repos/product-support-agent/docs/implementation-plan.md\nindex 0000000..0000000 100644\n--- a/C:/ubk-repos/product-support-agent/docs/implementation-plan.md\n+++ b/C:/ubk-repos/product-support-agent/docs/implementation-plan.md\n@@ -225,96 +225,96 @@\n **Goal:** Deliver a usable demo experience and test whether it helps target users complete real support tasks.\n \n **Scope and deliverables:**\n \n * Implement the Chainlit chat flow, visible demo limitations, supported-product names, source citations, and clear empty/error states.\n * Do not display past search history in the MVP. Define whether browser/session state is transient and what is sent to backend telemetry.\n * Add accessible interaction patterns, keyboard navigation, screen-reader labels, readable citations, and responsive layouts.\n * Run moderated usability sessions or an agreed equivalent with representative users using realistic support questions.\n * Record usability findings, answer failure modes, and prioritized product changes; do not treat successful HTTP responses as proof of product usefulness.\n \n **Verification and exit gate:**\n \n * UI tests cover catalog disclosure, chat submissions, citation navigation, errors, and no-history behavior.\n * Accessibility checks include automated scans and manual keyboard/screen-reader review against the agreed target.\n * User validation meets agreed task-completion and usefulness criteria, or findings are converted into approved changes before advancing.\n * You approve the demo UX and the evidence that the MVP is useful for its intended audience.\n \n **Depends on:** Phase 4 approval; Phase 0 persona, usability, privacy, and accessibility decisions.\n \n ### Phase 6: Local integrated MVP and evaluation\n \n **Goal:** Prove the full local product flow and establish repeatable quality evidence.\n \n **Scope and deliverables:**\n \n * Integrate UI, API, agent, worker, queue emulator, metadata store, vector store, and LiteLLM using Podman.\n * Create a versioned offline evaluation dataset with approved questions, expected evidence/source IDs, and known failure cases.\n * Add evaluation for retrieval relevance, factual grounding, citation correctness, unsupported requests, injection resistance, latency, and cost.\n * Add OpenTelemetry traces, metrics, and structured logs with sensitive-content redaction and correlation across ingestion and chat.\n * Define a telemetry data policy for user queries and responses, including notice, access, retention, deletion, and redaction before enabling content retention.\n * Publish a reproducible local demo runbook and an ingestion/evaluation report format.\n \n **Verification and exit gate:**\n \n * A clean local run exercises catalog-to-index and chat-to-citation paths end to end using approved fixtures or a controlled source run.\n * Unit, integration, end-to-end, and evaluation suites pass their agreed thresholds.\n * Trace inspection confirms useful spans and metrics while logs do not reveal configured secret/PII test values.\n * You approve local MVP behavior, evaluation thresholds, and telemetry policy.\n \n **Depends on:** Phases 2, 3, 4, and 5 approval.\n \n ### Phase 7: Azure infrastructure and deployment design\n \n **Goal:** Define and validate the cloud topology before provisioning resources.\n \n **Scope and deliverables:**\n \n * Produce Bicep modules for the approved network, Container Apps environment, APIM, queue, data services, Key Vault, monitoring, and required identities.\n * Define subnet allocation, private access, public ingress, DNS, outbound paths, private endpoints, and firewall rules.\n * Define how Azure AI Search, Cosmos DB Mongo API, Azure Storage Queue, Azure Cache for Redis if justified, and model services are accessed.\n * Use system-assigned managed identity for runtime access where supported; use least-privilege RBAC and avoid stored service credentials.\n * Define GitHub Actions workload identity federation, environment approvals, deployment permissions, and secret-free deployment.\n * Validate service/SKU availability, networking constraints, quota, cost estimates, data residency, and recovery requirements.\n \n **Verification and exit gate:**\n \n * Bicep builds and passes lint, what-if, policy, and security checks without provisioning production resources.\n * A threat-model review confirms trust boundaries and network paths match the diagrams.\n * Validate that APIM networking mode and selected service integration are supported for the chosen SKU/region.\n * You approve the cloud architecture, cost envelope, identity model, and deployment plan before any environment is provisioned.\n \n **Depends on:** Phase 0 architecture decisions and Phase 6 local MVP evidence.\n \n ### Phase 8: Cloud deployment, operational validation, and pilot\n \n **Goal:** Deploy to a controlled non-production Azure environment and validate operational behavior with limited users.\n \n **Scope and deliverables:**\n \n * Implement separate GitHub Actions workflows for infrastructure deployment, code build/test, and application deployment as appropriate.\n * Build and scan immutable UI/API/worker artifacts; deploy only approved artifacts through protected environments.\n * Add smoke tests, deployment health checks, rollback procedures, and environment configuration validation.\n * Configure Azure Monitor/Log Analytics and approved OpenTelemetry export; connect operational alerts to named owners.\n * Run cloud integration and end-to-end tests, load/limit tests, accessibility checks, security testing, and recovery exercises in a non-production environment.\n * Conduct a limited pilot only after user notice, support ownership, and telemetry policies are approved.\n \n **Verification and exit gate:**\n \n * CI/CD gates include tests, SAST, dependency and secret scanning, container/IaC scanning, and applicable DAST/IAST.\n * Deployment and rollback are repeatable, identity is least privilege, and no long-lived deployment secrets are stored in GitHub.\n * Pilot evaluation measures task success, answer quality, citations, accessibility, latency, cost, failures, and support burden.\n * You approve pilot evidence and explicitly decide whether to proceed toward production.\n \n **Depends on:** Phase 7 approval and successful cloud implementation of Phases 2-6.\n \n ### Phase 9: Production readiness decision\n \n **Goal:** Close operational, security, privacy, and product gaps before serving production users.\n \n **Scope and deliverables:**\n \n * Define and approve service-level objectives, capacity limits, availability targets, support hours, escalation, and incident response.\n * Complete privacy, legal/source-use, security, accessibility, data retention/deletion, and threat-model reviews.\n * Validate disaster recovery, backup/restore, index rebuild, queue replay, model/provider outage, and credential rotation procedures.\n * Establish continuous evaluation, quality regression alerts, model/version change review, and a process for updating the product manifest and source content.\n * Reassess the deferred OpenText Service Management expansion as a separate discovery and architecture decision.\n",
+                "isText": true,
+                "mimeType": "text/plain"
+              }
+            ],
+            "isError": false
+          },
+          "toolCallId": "call_f76b817446274d3bb2cdaacbb8d57993",
+          "toolId": "view",
+          "summary": {
+            "kind": "read",
+            "resources": [
+              {
+                "uri": {
+                  "$mid": 1,
+                  "path": "/C:/ubk-repos/product-support-agent/docs/implementation-plan.md",
+                  "scheme": "file"
+                }
+              }
+            ]
+          },
+          "startedAt": 1795245936020,
+          "completedAt": 1795245938732
+        },
+        {
+          "value": "Created the review-gated plan at [implementation-plan.md](C:/ubk-repos/product-support-agent/docs/implementation-plan.md), based on [Instructions.md](C:/ubk-repos/product-support-agent/Instructions.md).\n\nIt includes a proposed repository structure, a target architecture flow, an architecture-gap table with suggested defaults, and 10 phases from discovery through production readiness. Each phase has deliverables, verification criteria, dependencies, and an approval gate.\n\nThe plan specifically flags decisions such as telemetry retention versus user privacy, local/cloud search differences, Azure network topology, data ownership, and how to validate customer usefulness. No code or project folders were created. Since this is documentation-only, I did not run tests.",
+          "isTrusted": false,
+          "supportThemeIcons": false,
+          "supportHtml": false
+        }
+      ],
+      "agent": {
+        "id": "agent-host-copilotcli",
+        "name": "agent-host-copilotcli",
+        "fullName": "Copilot",
+        "description": "Copilot SDK agent running in the local agent host process",
+        "extensionId": {
+          "value": "vscode.agent-host",
+          "_lower": "vscode.agent-host"
+        },
+        "extensionPublisherId": "vscode",
+        "extensionDisplayName": "Agent Host",
+        "isDefault": false,
+        "isDynamic": true,
+        "isCore": true,
+        "metadata": {
+          "themeIcon": {
+            "id": "copilot"
+          }
+        },
+        "slashCommands": [],
+        "locations": [
+          "panel"
+        ],
+        "modes": [
+          "agent",
+          "ask"
+        ],
+        "disambiguation": []
+      },
+      "timestamp": 1795245818480,
+      "modelId": "agent-host-copilotcli:auto",
+      "modelConfiguration": {
+        "tier": "balance",
+        "vscode.modelConfiguration.tier.source": "default"
+      },
+      "modeInfo": {
+        "kind": "agent",
+        "isBuiltin": true,
+        "telemetryModeId": "agent",
+        "telemetryModeName": "agent",
+        "permissionLevel": "default"
+      },
+      "responseId": "response_a024265b-de2e-4e2d-80ae-dd76669465b1",
+      "result": {
+        "timings": {
+          "firstProgress": 32176,
+          "totalElapsed": 124353
+        },
+        "details": "GPT-6 Luna • 1 credit",
+        "metadata": {
+          "resolvedModel": "gpt-6-luna"
+        }
+      },
+      "responseMarkdownInfo": [],
+      "followups": [],
+      "modelState": {
+        "value": 1,
+        "completedAt": 1795245944100
+      },
+      "contentReferences": [],
+      "codeCitations": [],
+      "responseTimestamp": 1795245818480,
+      "timeSpentWaiting": 0,
+      "promptTokens": 57013,
+      "completionTokens": 8865,
+      "lastCallCompletionTokens": 361,
+      "copilotCredits": 0.9790277,
+      "modelTotals": [
+        {
+          "model": "GPT-6 Luna",
+          "inputTokens": 299584,
+          "cachedTokens": 242556,
+          "outputTokens": 8865
+        }
+      ],
+      "sessionCopilotCredits": 0.90605795,
+      "sessionCopilotCreditsStatus": "complete",
+      "elapsedMs": 125620
+    }
+  ]
+}
