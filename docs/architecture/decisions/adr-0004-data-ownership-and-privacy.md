@@ -2,7 +2,7 @@
 title: ADR-0004 Data Ownership and Privacy
 description: Proposed data ownership and telemetry minimization policy for the MVP
 author: Product Support Agent Team
-ms.date: 2026-11-21
+ms.date: 2026-11-22
 ms.topic: decision
 keywords:
   - ADR
@@ -24,8 +24,14 @@ or deletion policy is approved.
 
 ## Proposed decision
 
-* Use MongoDB as the proposed system of record for the local manifest, ingestion
-  run status, product outcomes, and canonical documents.
+* Use MongoDB as the proposed system of record for ingestion run status,
+  product outcomes, canonical documents and chunks, per-URL source fetch state
+  (`source_fetch_state`), and the ingestion run lease (`ingestion_leases`).
+* Keep the approved manifest and the documentation source map as versioned,
+  reviewed JSON files in `docs/operations/`. They are configuration and review
+  artifacts, not runtime state.
+* Expose coverage to the UI as product-level metadata only: status, counts, and
+  timestamps. Do not include page URLs or page content.
 * Treat Azure AI Search as a derived index containing searchable chunks and
   provenance, not as the operational system of record.
 * Keep queue messages limited to product references and run identifiers.
@@ -48,5 +54,7 @@ or deletion policy is approved.
 The user requests query/response retention for demo review, but retention is not
 enabled until the privacy impact assessment is approved. The assessment must
 specify the notice, access list, redaction behavior, retention period, and
-deletion process. Retention and deletion periods for canonical source content,
+deletion process. Source freshness is defined by ADR-0006: a 24-hour freshness window,
+conditional refresh, and deletion of pages that leave the source selection.
+Retention periods for canonical source content after a product is removed,
 run records, and operational telemetry remain open decisions.

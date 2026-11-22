@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from collections.abc import Iterable
 from html.parser import HTMLParser
 from typing import Any
@@ -10,6 +11,17 @@ import httpx
 from pydantic import BaseModel, HttpUrl
 
 ALLOWED_SOURCE_HOST = "my.opentext.com"
+ALLOWED_SOURCE_HOSTS = frozenset(
+    {
+        ALLOWED_SOURCE_HOST,
+        "support.opentext.com",
+        "docs.microfocus.com",
+        "www.microfocus.com",
+        "admhelp.microfocus.com",
+        "liaisontechnologies.service-now.com",
+        "answers.webroot.com",
+    }
+)
 MAX_DEMO_PRODUCTS = 100
 LISTING_URL = "https://my.opentext.com/support/products/"
 SEARCH_URL = "https://my.opentext.com/api/web/support/search-results"
@@ -54,7 +66,7 @@ class AnchorParser(HTMLParser):
 def validate_source_url(
     url: str,
     *,
-    allowed_host: str = ALLOWED_SOURCE_HOST,
+    allowed_host: str | None = None,
 ) -> bool:
     try:
         parsed = urlparse(url)
@@ -63,7 +75,7 @@ def validate_source_url(
         return False
     return (
         parsed.scheme == "https"
-        and parsed.hostname == allowed_host
+        and parsed.hostname in (ALLOWED_SOURCE_HOSTS if allowed_host is None else {allowed_host})
         and parsed.username is None
         and parsed.password is None
         and port is None
@@ -81,13 +93,40 @@ def is_login_redirect(response: httpx.Response) -> bool:
         destination = urlparse(urljoin(str(response.url), location))
     except ValueError:
         return True
-    return destination.hostname != ALLOWED_SOURCE_HOST or "login" in destination.path.lower()
+    path = destination.path.lower()
+    return (
+        not validate_source_url(destination.geturl())
+        or destination.hostname != response.url.host
+        or any(indicator in path for indicator in ("login", "log-in", "signin", "sign-in"))
+    )
+
+
+_PASSWORD_INPUT = re.compile(r"<input\b[^>]*\btype\s*=\s*['\"]?password\b", re.I)
+_LOGIN_FORM_ACTION = re.compile(
+    r"<form\b[^>]*\baction\s*=\s*['\"]?[^'\" >]*"
+    r"(?:login|log-in|signin|sign-in|saml|oauth|authorize)",
+    re.I,
+)
+_LOGIN_FORM_TEXT = re.compile(
+    r"<form\b[^>]*>(?:(?!</form>).){0,2000}?\b(?:sign[\s-]?in|log[\s-]?in)\b", re.I | re.S
+)
+_LOGIN_WORDS = re.compile(r"\b(?:sign[\s-]?in|log[\s-]?in|authentication required)\b", re.I)
+_SCRIPT_OR_STYLE = re.compile(r"<(script|style)\b[^>]*>.*?</\1\s*>", re.I | re.S)
+_TAG = re.compile(r"<[^>]+>")
+SHORT_LOGIN_PAGE_CHARS = 400
 
 
 def is_login_content(content: str) -> bool:
-    lowered = content.lower()
-    indicators = ("sign in", "log in", "login", "saml", "authentication required")
-    return any(indicator in lowered for indicator in indicators)
+    """Detect login walls without flagging documentation that merely mentions logging in."""
+    if (
+        _PASSWORD_INPUT.search(content)
+        or _LOGIN_FORM_ACTION.search(content)
+        or _LOGIN_FORM_TEXT.search(content)
+        or "samlrequest" in content.lower()
+    ):
+        return True
+    visible = " ".join(_TAG.sub(" ", _SCRIPT_OR_STYLE.sub(" ", content)).split())
+    return len(visible) < SHORT_LOGIN_PAGE_CHARS and bool(_LOGIN_WORDS.search(visible))
 
 
 def deduplicate_products(products: Iterable[ProductReference]) -> list[ProductReference]:
@@ -331,7 +370,7 @@ class CatalogClient:
         *,
         params: dict[str, str | int | float | bool | None] | None = None,
     ) -> httpx.Response | None:
-        if not validate_source_url(url):
+        if not validate_source_url(url, allowed_host=ALLOWED_SOURCE_HOST):
             return None
         if isinstance(self.client, httpx.Client):
             raise TypeError("CatalogClient requires an async httpx transport")

@@ -16,7 +16,13 @@ class QueueMessage:
 
 
 class QueueProducer(Protocol):
-    def send_product_reference(self, run_id: str, product_id: str) -> str: ...
+    def send_product_reference(
+        self,
+        run_id: str,
+        product_id: str,
+        source_url: str,
+        product_name: str | None = None,
+    ) -> str: ...
 
 
 class InMemoryQueue:
@@ -24,14 +30,25 @@ class InMemoryQueue:
         self.messages: list[QueueMessage] = []
         self.poison_messages: list[QueueMessage] = []
 
-    def send_product_reference(self, run_id: str, product_id: str) -> str:
+    def send_product_reference(
+        self,
+        run_id: str,
+        product_id: str,
+        source_url: str,
+        product_name: str | None = None,
+    ) -> str:
         message_id = f"{run_id}:{product_id}"
         self.messages.append(
             QueueMessage(
                 message_id=message_id,
                 dequeue_count=1,
                 pop_receipt=None,
-                payload={"run_id": run_id, "product_id": product_id},
+                payload={
+                    "run_id": run_id,
+                    "product_id": product_id,
+                    "source_url": source_url,
+                    "product_name": product_name or product_id,
+                },
             )
         )
         return message_id
@@ -56,9 +73,20 @@ class AzureQueueProducer:
         )
         self.client.create_queue()
 
-    def send_product_reference(self, run_id: str, product_id: str) -> str:
+    def send_product_reference(
+        self,
+        run_id: str,
+        product_id: str,
+        source_url: str,
+        product_name: str | None = None,
+    ) -> str:
         payload = json.dumps(
-            {"run_id": run_id, "product_id": product_id},
+            {
+                "run_id": run_id,
+                "product_id": product_id,
+                "source_url": source_url,
+                "product_name": product_name or product_id,
+            },
             separators=(",", ":"),
         )
         result = self.client.send_message(payload)
@@ -88,6 +116,7 @@ class AzureQueueConsumer:
                 payload = {}
             if not isinstance(payload, dict):
                 payload = {}
+            source_url = payload.get("source_url", "")
             messages.append(
                 QueueMessage(
                     message_id=str(item.id),
@@ -96,6 +125,10 @@ class AzureQueueConsumer:
                     payload={
                         "run_id": str(payload.get("run_id", "")),
                         "product_id": str(payload.get("product_id", "")),
+                        "source_url": source_url if isinstance(source_url, str) else "",
+                        "product_name": str(
+                            payload.get("product_name") or payload.get("product_id") or ""
+                        ),
                     },
                 )
             )

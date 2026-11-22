@@ -1,0 +1,97 @@
+{
+  "schema_version": "1",
+  "source_map_version": "phase-3-source-map-v1",
+  "manifest_version": "opentext-2026-11-21-v1",
+  "sources": [
+    {
+      "product_id": "1220",
+      "product_name": "AutoPass License Server",
+      "kind": "docs_portal_toc",
+      "seed_url": "https://docs.microfocus.com/135/26.4/tocflat.json",
+      "max_toc_level": 2,
+      "max_pages": 30
+    },
+    {
+      "product_id": "1268",
+      "product_name": "Database Activity Monitoring",
+      "kind": "docs_portal_toc",
+      "seed_url": "https://docs.microfocus.com/2099/26.1/tocflat.json",
+      "max_toc_level": 3,
+      "max_pages": 30
+    },
+    {
+      "product_id": "1176",
+      "product_name": "Change Guardian",
+      "kind": "docs_portal_toc",
+      "seed_url": "https://docs.microfocus.com/21/6.3.3/tocflat.json",
+      "max_toc_level": 2,
+      "max_pages": 30
+    },
+    {
+      "product_id": "1146",
+      "product_name": "ArcSight Management Center (ArcMC)",
+      "kind": "docs_portal_toc",
+      "seed_url": "https://docs.microfocus.com/2302/26.2/tocflat.json",
+      "max_toc_level": 3,
+      "max_pages": 30,
+      "notes": "Published on the documentation portal as SIEM Management Center Software."
+    },
+    {
+      "product_id": "1204",
+      "product_name": "GroupWise Disaster Recovery (Reload for GroupWise)",
+      "kind": "docs_portal_toc",
+      "seed_url": "https://docs.microfocus.com/2649/24.4/tocflat.json",
+      "max_pages": 30
+    },
+    {
+      "product_id": "1167",
+      "product_name": "iPrint",
+      "kind": "docs_portal_toc",
+      "seed_url": "https://docs.microfocus.com/27/26.4/tocflat.json",
+      "max_toc_level": 2,
+      "max_pages": 30,
+      "notes": "Published on the documentation portal as iPrint Appliance."
+    },
+    {
+      "product_id": "32",
+      "product_name": "Content Manager (Records Manager/TRIM)",
+      "kind": "docs_portal_toc",
+      "seed_url": "https://docs.microfocus.com/544/26.4/tocflat.json",
+      "max_toc_level": 2,
+      "max_pages": 30
+    },
+    {
+      "product_id": "1185",
+      "product_name": "LoadRunner Professional",
+      "kind": "sitemap",
+      "seed_url": "https://admhelp.microfocus.com/lr/sitemaps/LR_sitemap.xml",
+      "path_prefix": "/lr/en/26.1-26.3/help/WebHelp/Content/",
+      "include_path_patterns": ["/(WelcomeContent|Install|LandingPages)/"],
+      "exclude_path_patterns": ["/_rsc_", "/Resources/"],
+      "main_content_id": "mc-main-content",
+      "max_pages": 30
+    },
+    {
+      "product_id": "1184",
+      "product_name": "LoadRunner Enterprise",
+      "kind": "sitemap",
+      "seed_url": "https://admhelp.microfocus.com/lre/sitemaps/Sitemap.xml",
+      "path_prefix": "/lre/en/26.1-26.3/online_help/Content/",
+      "include_path_patterns": ["/(PC_QuickStart|PC_IG)/", "/(Whats_New|System-Requirements)\\.htm$"],
+      "exclude_path_patterns": ["/_rsc_", "/Resources/"],
+      "main_content_id": "mc-main-content",
+      "max_pages": 30
+    },
+    {
+      "product_id": "22",
+      "product_name": "ValueEdge",
+      "kind": "sitemap",
+      "seed_url": "https://admhelp.microfocus.com/valueedge/en/latest/Online/Sitemap.xml",
+      "path_prefix": "/valueedge/en/latest/Online/Content/",
+      "include_path_patterns": ["/(GetStarted|ValueEdge|AdminGuide)/"],
+      "exclude_path_patterns": ["/_rsc_", "/Resources/"],
+      "main_content_id": "mc-main-content",
+      "max_pages": 30
+    }
+  ]
+}

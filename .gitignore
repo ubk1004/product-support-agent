@@ -13,3 +13,4 @@ htmlcov/
 node_modules/
 apps/web/out/
 apps/web/build/
+.local/

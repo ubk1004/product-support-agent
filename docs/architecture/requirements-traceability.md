@@ -2,7 +2,7 @@
 title: Product Support Agent Requirements Traceability
 description: Maps the numbered requirements in Instructions.md to planned components, phases, and verification
 author: Product Support Agent Team
-ms.date: 2026-11-21
+ms.date: 2026-11-22
 ms.topic: reference
 keywords:
   - requirements
@@ -21,9 +21,9 @@ Source numbering refers to [Instructions.md](../../Instructions.md).
 
 | # | Requirement summary | Planned component or artifact | Phase | Verification evidence |
 |---:|---|---|---:|---|
-| 1 | Discover public products/resources; parameterized hard cap of 100; disclose products successfully indexed | Catalog, manifest, ingestion worker, Next.js product-status view | 0, 2, 5 | Stubbed catalog/worker tests; approved manifest; bounded run; UI status shows successes and limited coverage |
-| 2 | Handle empty catalogs, 429, and exponential backoff | Catalog and ingestion worker | 2 | Unit tests for empty result, `Retry-After`, retry cap, and backoff |
-| 3 | Normalize canonical documents for idempotent and delta updates | Canonical document schema and indexer | 3 | Schema, hash, update, and deletion tests |
+| 1 | Discover public products/resources; parameterized hard cap of 100; disclose products successfully indexed | Catalog, manifest, source map, source ingestion worker, `GET /catalog/coverage`, Next.js coverage view | 0, 2, 3, 5 | Stubbed catalog/worker tests; approved manifest; `test_phase_three_coverage.py`; the coverage view renders the summary, table, and unavailable states; a bounded live run is pending authorization |
+| 2 | Handle empty catalogs, 429, and exponential backoff | Catalog, ingestion workers, fetch state | 2, 3 | Unit tests for empty results, `Retry-After`, retry caps, backoff, host abort on 429, product fail-fast, and resume after restart without refetching |
+| 3 | Normalize canonical documents for idempotent and delta updates | Canonical document schema, indexer, fetch state | 3 | Schema, hash, update, and deletion tests; tests for unchanged revisions and bodies, conditional GETs, and removed pages |
 | 4 | Support keyword, metadata, and semantic search | Azure AI Search retrieval adapter | 3 | Dedicated index integration and reviewed relevance set |
 | 5 | Preserve source URLs in results | Canonical provenance and retrieval response | 3, 4 | Source ID/URL preservation and citation-binding tests |
 | 6 | Use structured tool calling and RAG | Agent Framework agent and retrieval tool | 4 | Tool schema, fake gateway, grounded answer end-to-end tests |

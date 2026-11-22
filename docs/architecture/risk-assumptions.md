@@ -2,7 +2,7 @@
 title: Product Support Agent Risks and Assumptions
 description: Phase 0 risk and assumption register for the local-first product support demo
 author: Product Support Agent Team
-ms.date: 2026-11-21
+ms.date: 2026-11-22
 ms.topic: reference
 keywords:
   - risk register
@@ -22,13 +22,16 @@ qualitative and require review.
 
 | ID | Risk | Rating | Proposed response | Owner | Phase |
 |---|---|---|---|---|---:|
-| R-01 | The OpenText listing and feed do not yet provide a verified, parseable anonymous catalog contract; the search API returned 401. | High | Use only the authorized 100 additional GETs as a strict aggregate cap, with bounded response reads. Resolve endpoint behavior, pagination, fallback, terms, and per-run limits before Phase 2. | Product owner and ingestion lead | 0, 2 |
+| R-01 | The feed parsed into 1,302 unique products, but the product pages are client-rendered and contain no product text; the old heuristic flagged them on navigation links. | Resolved for content | Product pages are now the catalog only. Documentation comes from the source map, and the heuristic was narrowed to real login walls. | Product owner and ingestion lead | 0, 2, 3 |
 | R-02 | The search API returned 401; protected support content could be misclassified as missing or retried with unsafe credentials. | High | Treat 401/403 and login redirects/content as protected skips. Never authenticate or bypass access restrictions. | Ingestion lead | 2 |
 | R-03 | Random product selection could vary between runs and make the UI and evaluation irreproducible. | Medium | Parameterize the maximum at 100; persist and version one exact random manifest; require explicit replacement and show product-level ingestion outcomes. | Product owner | 2 |
 | R-04 | The user requests query/response retention for demo review, but notice, access, redaction, retention, and deletion rules are not approved. | High | Add global and per-session off controls, default retention off, and do not retain real content until the Phase 0b privacy policy is approved. | Privacy owner, TBD | 0b, 6 |
 | R-05 | Local access to Azure AI Search and Foundry depends on user-supplied service configuration, network access, quota, and authentication. | Medium | Keep unit/integration tests deterministic; document connectivity and quota prerequisites for the local demo. | Demo operator, TBD | 1, 6 |
 | R-06 | The model may repeat injected source instructions, invent citations, or render unsafe source links. | High | Treat source text as untrusted; render only server-resolved URLs from retrieved evidence; test injection and rendering paths. | Agent lead | 0b, 4, 5 |
 | R-07 | The conceptual cloud network and identity design may not match current regional SKU, quota, or service constraints. | Medium | Validate against current Microsoft documentation and subscription facts in Phase 7; do not deploy the application stack. | Cloud architect, TBD | 7 |
+| R-09 | Documentation source terms are unverified. The `www.microfocus.com/legal` page returned 403 to automated access, and public access does not establish reuse rights. | High | Review the terms manually and record the result before the first ingestion run; until then, run only `--discover-only` or offline tests. | Product owner | 3 |
+| R-10 | A scheduled indexer could repeat requests after a crash, overlap with another run, or keep hitting failing sources. | Medium | Durable per-URL fetch state, a 24-hour freshness window, conditional GETs, classified backoff, product fail-fast, host abort on 429, a request budget, and a single-runner lease (ADR-0006). | Ingestion lead | 3 |
+| R-11 | The curated source map covers 10 of 100 manifest products and is biased toward the former Micro Focus documentation portals. | Medium | The home page coverage view discloses indexed products first and labels the rest as not covered; no content is invented. | Product owner | 3, 5 |
 | R-08 | “Working demo” may not establish that target users can complete useful support tasks. | Medium | Define users, priority tasks, task success measures, and a moderated usability study in Phase 0/5. | Product owner | 0, 5 |
 
 ## Assumptions

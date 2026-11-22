@@ -15,7 +15,7 @@ estimated_reading_time: 9
 
 The user approved this register with conditions at the Phase 0b gate. Ratings
 are qualitative pre-mitigation assessments. Mitigations are planned unless the
-[Phase 1 review](#phase-1-review) records implemented evidence. The register uses STRIDE across the architecture trust boundaries and
+relevant phase review records implemented evidence. The register uses STRIDE across the architecture trust boundaries and
 includes AI-specific risks from the
 [OWASP Top 10 for LLM Applications](https://owasp.org/www-project-top-10-for-large-language-model-applications/)
 and [MITRE ATLAS](https://atlas.mitre.org/).
@@ -24,12 +24,12 @@ and [MITRE ATLAS](https://atlas.mitre.org/).
 
 | ID | Asset or data | Classification | Owner | Location and flow | Proposed retention |
 |---|---|---|---|---|---|
-| A-01 | Product manifest, product names/IDs/URLs, and per-product ingestion outcomes | Internal demo metadata | Product owner | MongoDB to API and Next.js UI | Retain only the current approved manifest and run outcomes; deletion policy pending |
+| A-01 | Product manifest, source map, product names/IDs/URLs, per-product ingestion outcomes, and coverage status | Internal demo metadata | Product owner | Versioned JSON and MongoDB to the coverage API and Next.js UI | Retain only the current approved manifest, source map, and run outcomes; deletion policy pending |
 | A-02 | Public-source content, canonical documents, chunks, and embeddings | Untrusted source material | Ingestion/data owner | Worker, MongoDB, Azure AI Search | Store only permitted public content; freshness and deletion period pending |
 | A-03 | User queries and assistant responses | Potentially sensitive user content | Privacy owner, TBD | Browser, Next.js, FastAPI, agent, LiteLLM, Foundry; optional restricted MongoDB collection | Retention is disabled until the privacy policy and provider handling are approved; if enabled, redacted content only for the configured TTL |
 | A-04 | Source IDs, URLs, and retrieval excerpts | Public provenance plus untrusted text | Search/data owner | Azure AI Search, agent, API, Next.js | Retain with indexed content; never accept model-authored source URLs |
 | A-05 | Foundry, Azure AI Search, MongoDB, and gateway credentials/configuration | Secret | Application maintainer | Developer environment or approved secret store | Do not commit, log, trace, or include in fixtures |
-| A-06 | Queue messages, run IDs, status, timestamps, retry/dequeue counts | Internal operational metadata | Ingestion owner | Azurite/Storage Queue, worker, MongoDB | Retention and deletion period pending |
+| A-06 | Queue messages, run IDs, status, timestamps, retry/dequeue counts, source fetch state, and the run lease | Internal operational metadata | Ingestion owner | Azurite/Storage Queue, workers, MongoDB | Fetch state is kept while a source is in the map; deletion period pending |
 | A-07 | Logs, traces, and metrics | Internal operational telemetry | Application/security owner | Local collector or selected destination | Minimized metadata only; no query/response content before policy approval |
 
 ## Trust boundaries
@@ -37,9 +37,9 @@ and [MITRE ATLAS](https://atlas.mitre.org/).
 | Boundary | Crossing data or action | Main concern |
 |---|---|---|
 | TB-01 External user/browser to Next.js | User input, rendered answer, links, optional retention choice | Malicious input, unsafe rendering, unintended retention |
-| TB-02 Next.js to FastAPI and agent | Chat request, session metadata, response | Schema bypass, resource exhaustion, session mix-up |
+| TB-02 Next.js to FastAPI and agent | Server-side coverage fetch; planned chat request, session metadata, response | Schema bypass, resource exhaustion, session mix-up |
 | TB-03 Agent/LiteLLM to Foundry | Prompt, retrieved evidence, model output | Prompt injection, provider data handling, quota abuse |
-| TB-04 Worker to OpenText | Anonymous catalog/page requests and returned content | SSRF, protected content, source load, hostile content |
+| TB-04 Workers to public sources | Anonymous catalog requests, robots.txt, source map seeds, documentation pages, and returned content | SSRF, protected content, source load, hostile content |
 | TB-05 Catalog/worker to queue and MongoDB | Product references, run status, canonical records | Replay, tampering, duplicate work, excessive retention |
 | TB-06 Worker/agent to Azure AI Search | Documents, embeddings, queries, results | Unauthorized access, index tampering, stale/poisoned data |
 | TB-07 Services to telemetry | Operational events; optionally retained content only after approval | Secret/content leakage and excessive access |
@@ -56,7 +56,7 @@ the corresponding data-flow and deployment diagrams.
 | T-01 | Indirect prompt injection in source text (TB-03, TB-04, TB-06) | Tampering; LLM prompt injection | High: retrieved content can steer the model or tools | Treat source text as data; restrict tools; test malicious instructions in source fixtures and verify no unauthorized action or unsupported answer | Agent owner, Phase 4 | APIM policy and monitoring supplement, but do not replace application validation | Planned |
 | T-02 | SSRF or unsafe redirect through catalog/page URLs (TB-04) | Spoofing, information disclosure | High: a crafted URL could reach internal or non-allowlisted services | Allowlist scheme/host; validate every redirect; reject private, loopback, link-local, and unexpected hosts; test hostile URLs and redirects | Ingestion owner, Phase 2 | Worker egress allowlist, NSGs, firewall/NAT | Planned |
 | T-03 | Crawler abuse, excessive requests, or rate-limit disregard (TB-04) | Denial of service | High: source load or blocked access | Enforce product/request/page/download/concurrency/time budgets; honor `Retry-After`; stop on 401/403; test request cap and 429 behavior | Ingestion owner, Phase 2 | Stable egress IP and egress controls | Planned |
-| T-04 | Protected content stored after 401/403, login redirect, or login page (TB-04) | Information disclosure | High: authenticated material is outside the anonymous MVP | Treat protected responses as skips; store only minimal status; test all protected outcomes and assert no content reaches MongoDB or Search | Ingestion owner, Phase 2 | Same application rule; network controls are not authorization bypasses | Planned |
+| T-04 | Protected content stored after 401/403, login redirect, or login page (TB-04) | Information disclosure | High: authenticated material is outside the anonymous MVP | Treat protected responses as skips; store only minimal status; test all protected outcomes and assert no content reaches MongoDB or Search | Ingestion owner, Phase 2 | Same application rule; network controls are not authorization bypasses | Partially mitigated; heuristic narrowed to login walls in Phase 3; live validation pending the first authorized run |
 | T-05 | Citation spoofing, altered URLs, or unsupported product claims (TB-02, TB-03, TB-06) | Tampering; LLM misinformation | High: users may trust fabricated support guidance | Bind source IDs to retrieved records; resolve URLs server-side; validate every cited ID; test forged IDs/URLs and unsupported questions | Agent owner, Phase 4 | APIM does not replace citation validation | Planned |
 | T-06 | Unsafe markdown, external image loads, or script injection in rendered content (TB-01, TB-02) | Information disclosure, elevation of privilege; LLM output handling | High: rendering can execute or disclose data in a user's browser | Sanitize rendered text; restrict schemes and link targets; disallow remote images/active HTML; test XSS payloads and outbound image/link behavior | UI owner, Phase 5 | WAF/APIM may add defense in depth; output encoding remains required | Planned |
 | T-07 | Query/response retention exposes personal or sensitive content (TB-01, TB-07) | Information disclosure; privacy risk | High: requested demo retention still lacks final policy/provider approval | Keep the global flag off until approval; use the 7-day configurable TTL; show notice and per-session opt-out; redact before persistence and fail closed; restrict access to the configured reviewer role; test off modes and synthetic sensitive values | Privacy owner, TBD; Phase 0b/6 | Managed identity, RBAC, Key Vault, monitored retention controls | Pending policy approval |
@@ -95,3 +95,35 @@ re-rated.
 Each threat's Phase 1 portion has the evidence listed above. The remaining
 items belong to later phases or to the first GitHub-hosted CI run. The user
 decides at the Phase 1 gate whether any of them must block closure.
+
+## Phase 2 review
+
+The 2026-11-21 live source check fetched the OpenText feed and created the
+[100-product manifest](../operations/phase-2-product-manifest-v1.json). It
+checked 97 selected product URLs sequentially within the original additional
+GET budget plus one separately authorized full-feed GET. Each returned HTTP 200
+and was skipped by the login-content heuristic; three products were not
+checked. Since the response bodies were not retained, the login classification
+may reflect page navigation rather than a protected login page. No page content
+was persisted or indexed.
+
+| Threat | Phase 2 evidence | Remaining before closure |
+|---|---|---|
+| T-02 | The manifest contains allowlisted HTTPS URLs. The queue now carries the manifest source URL, and the worker validates it before fetching. | Live redirect and URL edge cases remain covered by deterministic tests; no new trust boundary was introduced. |
+| T-03 | The original 100-additional-GET cap is exhausted; checks were sequential and a separately authorized feed GET was also used. | The final three products are unverified; any further live requests require authorization. |
+| T-04 | Protected responses and oversized streamed content are skipped by the worker; tests assert protected content is not persisted. | The 97 HTTP 200 login-content classifications need validation before treating those pages as protected or public. |
+| T-09 | No content was indexed or deleted in Phase 2. | Schema, freshness, reconciliation, and deletion tests belong to Phase 3. |
+| T-11 | No Azure AI Search connection or credential was used. | Search access controls and isolated test-index verification belong to Phase 3. |
+
+## Phase 3 source ingestion review
+
+The periodic source worker ([ADR-0006](../architecture/decisions/adr-0006-periodic-resumable-source-ingestion.md))
+is tested offline only.
+
+| Threat | Phase 3 evidence | Remaining before closure |
+|---|---|---|
+| T-02 | The source map validates seed hosts against the allowlist. Discovered fetch and citation URLs are validated again, TOC `href` values are character-restricted and reject `..`, sitemap URLs must match the seed host, sitemap indexes are not followed, and redirects are never followed. Sitemaps are parsed with `defusedxml`, which forbids DTDs. | Live egress allowlisting remains a cloud-design control. |
+| T-03 | Per-run request budget, at least 1 second between requests per host, at most 2 attempts per page, `Retry-After` capped at 60 seconds, a host abort on 429 or an unavailable `robots.txt`, product fail-fast, classified backoff, a 24-hour freshness skip, conditional GETs, and a single-runner lease. Tests cover each. | The first live run requires authorization. |
+| T-04 | The login heuristic now detects password fields, login forms and actions, SAML requests, and short sign-in pages, instead of any occurrence of the word "login". Docs-portal JSON is checked after extraction. Protected pages are skipped with a 30-day backoff, and tests assert that nothing is stored. | Validate against live pages during the first authorized run. |
+| T-14 | The coverage view is read-only, rendered on the server, and returns metadata only; the browser cannot reach FastAPI through it. | Session isolation for chat remains Phase 4/5. |
+| T-09 | Documents carry `fetched_at`; unchanged revisions and bodies are not reindexed; pages that leave the selection are deleted; and the search index is written before the canonical record so interrupted runs retry. | Live Search deletion and reindex tests. |

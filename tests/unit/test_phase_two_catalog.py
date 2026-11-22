@@ -159,17 +159,55 @@ def test_search_stops_at_page_limit() -> None:
     ("url", "allowed"),
     [
         ("https://my.opentext.com/support/products/a", True),
+        ("https://support.opentext.com/csm?id=knowledge", True),
+        ("https://docs.microfocus.com/doc/product", True),
+        ("https://www.microfocus.com/documentation/product", True),
+        ("https://admhelp.microfocus.com/product/help", True),
+        ("https://liaisontechnologies.service-now.com/sp", True),
+        ("https://answers.webroot.com/Webroot/ukp.aspx", True),
         ("http://my.opentext.com/support/products/a", False),
         ("https://my.opentext.com.evil.example/a", False),
+        ("https://support.opentext.com.evil.example/a", False),
+        ("https://evil.support.opentext.com/a", False),
         ("https://evil.example/my.opentext.com/a", False),
         ("https://my.opentext.com:444/a", False),
         ("https://my.opentext.com:notaport/a", False),
         ("https://user:password@my.opentext.com/a", False),
     ],
-    ids=["allowed", "http", "suffix-host", "wrong-host", "port", "bad-port", "userinfo"],
+    ids=[
+        "catalog",
+        "opentext-support",
+        "microfocus-docs",
+        "microfocus-website",
+        "microfocus-admhelp",
+        "liaison-knowledge",
+        "webroot-knowledge",
+        "http",
+        "catalog-suffix-host",
+        "support-suffix-host",
+        "support-subdomain",
+        "wrong-host",
+        "port",
+        "bad-port",
+        "userinfo",
+    ],
 )
 def test_source_url_allowlist(url: str, allowed: bool) -> None:
     assert validate_source_url(url) is allowed
+
+
+def test_catalog_requests_remain_limited_to_catalog_host() -> None:
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200, text="unexpected")
+
+    client = CatalogClient(client=httpx.MockTransport(handler))
+    result = asyncio.run(client._bounded_get("https://support.opentext.com/csm"))
+
+    assert result is None
+    assert calls == []
 
 
 def test_manifest_selection_is_reproducible_across_input_order() -> None:

@@ -4,8 +4,12 @@ version = "0.1.0"
 description = "Local-first product support assistant backend"
 requires-python = ">=3.11"
 dependencies = [
+    "aiohttp>=3.10,<4",
+    "azure-search-documents>=12,<13",
     "azure-storage-queue>=12.13,<13",
+    "defusedxml>=0.7.1,<1",
     "fastapi>=0.115,<1",
+    "httpx>=0.28,<1",
     "pydantic-settings>=2.7,<3",
     "pymongo>=4.10,<5",
     "python-dotenv>=1.0,<2",
@@ -15,11 +19,11 @@ dependencies = [
 [dependency-groups]
 dev = [
     "bandit>=1.8,<2",
-    "httpx>=0.28,<1",
     "mypy>=1.13,<2",
     "pip-audit>=2.7,<3",
     "pytest>=9.0.3,<10",
     "ruff>=0.9,<1",
+    "types-defusedxml>=0.7,<1",
 ]
 
 [build-system]
@@ -31,7 +35,10 @@ packages = ["src/product_support_agent"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+addopts = "-ra -m 'not live'"
+markers = [
+    "live: calls real Foundry or Azure AI Search (pre-authorized for the demo; run with -m live)",
+]
 
 [tool.ruff]
 line-length = 100

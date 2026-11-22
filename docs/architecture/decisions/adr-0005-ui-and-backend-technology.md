@@ -2,7 +2,7 @@
 title: ADR-0005 User Interface and Backend Technology
 description: Records the approved React and Next.js frontend and Python backend choices
 author: Product Support Agent Team
-ms.date: 2026-11-21
+ms.date: 2026-11-22
 ms.topic: decision
 keywords:
   - ADR
@@ -27,8 +27,12 @@ Microsoft Agent Framework.
 * Build the user interface with React, Next.js App Router, and TypeScript.
 * Build the API and agent services in Python, using FastAPI and Microsoft Agent
   Framework.
-* Keep the UI and backend as separate applications. The browser communicates
-  with FastAPI through an explicit API contract.
+* Keep the UI and backend as separate applications that communicate through an
+  explicit API contract. Read-only views such as demo coverage are rendered by
+  Next.js Server Components that call FastAPI from the server, using
+  `PRODUCT_SUPPORT_API_BASE_URL`. The browser does not call FastAPI directly for
+  these views, so the API needs no CORS policy and stays on loopback. The chat
+  transport is decided in Phase 5.
 * Keep UI state transient and do not display past searches. Query/response
   retention remains disabled until its privacy and provider-handling gates pass.
 * Use Node.js 20.9 or later for the Next.js toolchain. Pin JavaScript

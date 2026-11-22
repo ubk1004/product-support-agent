@@ -36,6 +36,10 @@ Do not store secrets, credentials, raw retrieved source text, browser identifier
 or personal identifiers beyond what is necessary for the approved purpose.
 OpenTelemetry logs and traces remain content-free.
 
+The documentation ingestion job and the coverage view process no personal
+data. Fetch state, run reports, and coverage responses contain product IDs,
+public URLs or hostnames, outcome categories, counts, and timestamps only.
+
 The query may also be sent to the user's LiteLLM and Foundry deployments to
 generate an answer. Their data handling, location, and retention settings must
 be verified separately. Local application retention controls do not control

@@ -2,7 +2,7 @@
 title: Product Support Agent Support Ownership
 description: Proposed responsibility and escalation outline for the MVP and later cloud design
 author: Product Support Agent Team
-ms.date: 2026-11-21
+ms.date: 2026-11-22
 ms.topic: reference
 keywords:
   - support ownership
@@ -39,6 +39,8 @@ hold multiple roles for the MVP, but the responsibilities must remain explicit.
 | Approve product tasks, 100-product sample, and phase gates | Product owner | Product owner | Application maintainer, AI owner |
 | Approve source access and request budgets | Product owner | Ingestion and data owner | Privacy/security reviewer |
 | Maintain ingestion and search index | Ingestion and data owner | Application maintainer | AI owner |
+| Maintain the source map and weekly ingestion schedule; review run reports | Ingestion and data owner | Demo operator | Product owner |
+| Approve resets with `--force` and changes to the source map | Product owner | Ingestion and data owner | Privacy/security reviewer |
 | Review answer quality and evaluation thresholds | Product owner | AI and evaluation owner | Application maintainer |
 | Approve query/response telemetry policy | Privacy owner, TBD | Application maintainer | Product owner, security reviewer |
 | Triage local demo failures | Product owner | Application maintainer and demo operator | Ingestion/data owner, AI owner |
@@ -48,7 +50,9 @@ hold multiple roles for the MVP, but the responsibilities must remain explicit.
 ## Escalation limits
 
 * Stop ingestion on unexpected authentication, redirect, rate-limit, or
-  response-size behavior. Do not work around access restrictions.
+  response-size behavior. Do not work around access restrictions. The worker
+  backs off automatically. Do not clear its fetch state or use `--force` to
+  retry a protected or rate-limited source without approval.
 * Stop the demo if source citations cannot be resolved to retrieved evidence or
   if logs expose secrets or user content.
 * Escalate quota, credential, service availability, and network issues to the

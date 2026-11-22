@@ -54,5 +54,10 @@ class PhaseTwoService:
         )
         self.store.start_run(run)
         for product in self.manifest.selected_products:
-            self.queue.send_product_reference(active_run_id, product.product_id)
+            self.queue.send_product_reference(
+                active_run_id,
+                product.product_id,
+                str(product.source_url),
+                product.name,
+            )
         return run

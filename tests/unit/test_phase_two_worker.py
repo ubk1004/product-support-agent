@@ -11,7 +11,9 @@ from product_support_agent.worker import IngestionWorker
 
 def setup_worker(handler, *, dequeue_count=1, **options):
     queue = InMemoryQueue()
-    queue.send_product_reference("run-1", "product-a")
+    queue.send_product_reference(
+        "run-1", "product-a", "https://my.opentext.com/support/products/product-a"
+    )
     original = queue.messages[0]
     queue.messages[0] = QueueMessage(
         message_id=original.message_id,
@@ -27,6 +29,39 @@ def setup_worker(handler, *, dequeue_count=1, **options):
     return worker, queue, store
 
 
+def test_worker_uses_message_source_url_and_records_original_product_id() -> None:
+    source_url = "https://my.opentext.com/support/products/analytics-database"
+    requests = []
+
+    def handler(request):
+        requests.append(str(request.url))
+        return httpx.Response(200, text="Public documentation")
+
+    queue = InMemoryQueue()
+    queue.messages.append(
+        QueueMessage(
+            message_id="run-1:1",
+            dequeue_count=1,
+            pop_receipt=None,
+            payload={"run_id": "run-1", "product_id": "1", "source_url": source_url},
+        )
+    )
+    store = InMemoryIngestionStore()
+    store.start_run(IngestionRun(run_id="run-1", manifest_version="v1", started_at="start"))
+    worker = IngestionWorker(queue=queue, store=store, http_client=httpx.MockTransport(handler))
+
+    assert asyncio.run(worker.process()) == 1
+    assert requests == [source_url]
+    result = store.products[("run-1", "1")]
+    assert (result.run_id, result.product_id, result.source_url) == ("run-1", "1", source_url)
+    assert (result.outcome, result.reason_category, result.http_status) == (
+        "success",
+        "downloaded",
+        200,
+    )
+    assert queue.receive() == []
+
+
 @pytest.mark.parametrize(
     ("response", "outcome", "reason", "status"),
     [
@@ -34,6 +69,12 @@ def setup_worker(handler, *, dequeue_count=1, **options):
         (httpx.Response(401), "skipped", "protected_401", 401),
         (httpx.Response(403), "skipped", "protected_403", 403),
         (httpx.Response(302, headers={"Location": "/login"}), "skipped", "protected_redirect", 302),
+        (
+            httpx.Response(302, headers={"Location": "/signin"}),
+            "skipped",
+            "protected_redirect",
+            302,
+        ),
         (
             httpx.Response(302, headers={"Location": "https://evil.example/login"}),
             "skipped",
@@ -82,6 +123,26 @@ def test_worker_does_not_store_protected_response_content() -> None:
     assert secret_content not in status.model_dump_json()
 
 
+def test_worker_does_not_follow_nonlogin_redirect_on_approved_documentation_host() -> None:
+    source_url = "https://admhelp.microfocus.com/product/old"
+    calls = []
+
+    def handler(request):
+        calls.append(str(request.url))
+        return httpx.Response(307, headers={"Location": "/product/new"})
+
+    queue = InMemoryQueue()
+    queue.send_product_reference("run-1", "product-a", source_url)
+    store = InMemoryIngestionStore()
+    store.start_run(IngestionRun(run_id="run-1", manifest_version="v1", started_at="start"))
+    worker = IngestionWorker(queue=queue, store=store, http_client=httpx.MockTransport(handler))
+
+    assert asyncio.run(worker.process()) == 1
+    status = store.products[("run-1", "product-a")]
+    assert calls == [source_url]
+    assert (status.outcome, status.reason_category) == ("failed", "http_307")
+
+
 def test_worker_retries_429_using_retry_after_then_succeeds(monkeypatch) -> None:
     calls = []
     sleeps = []
@@ -89,7 +150,7 @@ def test_worker_retries_429_using_retry_after_then_succeeds(monkeypatch) -> None
     async def sleep(seconds):
         sleeps.append(seconds)
 
-    monkeypatch.setattr("product_support_agent.worker.asyncio.sleep", sleep)
+    monkeypatch.setattr("product_support_agent.http_fetch.asyncio.sleep", sleep)
 
     def handler(request):
         calls.append(str(request.url))
@@ -117,7 +178,7 @@ def test_retry_after_is_not_shortened_below_server_delay(monkeypatch) -> None:
     async def sleep(seconds):
         sleeps.append(seconds)
 
-    monkeypatch.setattr("product_support_agent.worker.asyncio.sleep", sleep)
+    monkeypatch.setattr("product_support_agent.http_fetch.asyncio.sleep", sleep)
 
     def handler(request):
         calls.append(request)
@@ -143,8 +204,8 @@ def test_worker_stops_at_max_attempts(monkeypatch, http_status, reason) -> None:
     async def sleep(seconds):
         sleeps.append(seconds)
 
-    monkeypatch.setattr("product_support_agent.worker.asyncio.sleep", sleep)
-    monkeypatch.setattr("product_support_agent.worker.secrets.randbelow", lambda _upper: 0)
+    monkeypatch.setattr("product_support_agent.http_fetch.asyncio.sleep", sleep)
+    monkeypatch.setattr("product_support_agent.http_fetch.secrets.randbelow", lambda _upper: 0)
 
     def handler(request):
         calls.append(request)
@@ -170,8 +231,8 @@ def test_network_errors_are_bounded_and_reported(monkeypatch) -> None:
     async def sleep(seconds):
         sleeps.append(seconds)
 
-    monkeypatch.setattr("product_support_agent.worker.asyncio.sleep", sleep)
-    monkeypatch.setattr("product_support_agent.worker.secrets.randbelow", lambda _upper: 0)
+    monkeypatch.setattr("product_support_agent.http_fetch.asyncio.sleep", sleep)
+    monkeypatch.setattr("product_support_agent.http_fetch.secrets.randbelow", lambda _upper: 0)
 
     def handler(request):
         calls.append(request)
@@ -201,6 +262,38 @@ def test_oversized_download_is_skipped() -> None:
         "oversized",
         200,
     )
+
+
+def test_oversized_stream_stops_before_reading_subsequent_chunks() -> None:
+    class RecordingStream(httpx.AsyncByteStream):
+        def __init__(self):
+            self.consumed = []
+            self.closed = False
+
+        async def __aiter__(self):
+            for chunk in (b"abcd", b"e", b"must not be read"):
+                self.consumed.append(chunk)
+                yield chunk
+
+        async def aclose(self):
+            self.closed = True
+
+    stream = RecordingStream()
+    worker, queue, store = setup_worker(
+        lambda request: httpx.Response(200, stream=stream), max_download_bytes=4
+    )
+
+    assert asyncio.run(worker.process()) == 1
+    status = store.products[("run-1", "product-a")]
+    assert (status.outcome, status.reason_category, status.http_status, status.attempt_count) == (
+        "skipped",
+        "oversized",
+        200,
+        1,
+    )
+    assert stream.consumed == [b"abcd", b"e"]
+    assert stream.closed
+    assert queue.receive() == []
 
 
 def test_poison_threshold_records_dead_letter_without_http() -> None:
@@ -241,7 +334,7 @@ def test_retry_after_parses_date_and_invalid_header(monkeypatch) -> None:
         def now(cls, tz=None):
             return cls(2026, 1, 1, tzinfo=UTC)
 
-    monkeypatch.setattr("product_support_agent.worker.datetime", FixedDateTime)
+    monkeypatch.setattr("product_support_agent.http_fetch.datetime", FixedDateTime)
     future = httpx.Response(429, headers={"Retry-After": "Thu, 01 Jan 2026 00:00:10 GMT"})
     past = httpx.Response(429, headers={"Retry-After": "Wed, 31 Dec 2025 23:59:50 GMT"})
     invalid = httpx.Response(429, headers={"Retry-After": "later"})

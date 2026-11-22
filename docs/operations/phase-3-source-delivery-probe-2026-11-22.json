@@ -1,0 +1,55 @@
+{
+  "checked_at_utc": "2026-11-22",
+  "manifest_version": "opentext-2026-11-21-v1",
+  "purpose": "Establish a repeatable anonymous fetch path for documentation observed in the linked-source review, so that it can be ingested by the bounded source worker.",
+  "method": "Anonymous HTTPS GET with an identifying User-Agent, about one request per second, no credentials, redirects not followed. Bodies were inspected transiently in a local temp directory for format discovery and were not committed, stored in MongoDB, embedded, or uploaded to Azure AI Search. robots.txt was evaluated with an RFC 9309 matcher that supports * and $ wildcards (the Python standard-library parser does not).",
+  "approximate_requests": 35,
+  "findings": [
+    {
+      "host": "my.opentext.com",
+      "finding": "Product pages are a client-rendered Nuxt shell. They are a catalog source, not a documentation source.",
+      "action": "Do not fetch product pages for content."
+    },
+    {
+      "host": "support.opentext.com",
+      "finding": "Knowledge-base search links render a login page with HTTP 200.",
+      "action": "Excluded from the source map."
+    },
+    {
+      "host": "docs.microfocus.com",
+      "finding": "The documentation portal is an Angular single-page app whose HTML has no article text. The SPA loads anonymous JSON: /daily/prodandaddon.json (product directory), /{ns}/{version}/tocflat.json (table of contents with href and revisionId), and /{href}/default-{revisionId}.json (page HTML in parse.text['*']). The user-facing citation URL is /doc/{href}. Adding /doc/ to the JSON paths returns an S3 AccessDenied 403, which is a wrong path rather than an authentication response. JSON responses carry ETag and Last-Modified.",
+      "robots": "robots.txt allows the selected paths; it disallows */beta/*, */itomw/*, */classic/*, */admin/*, *&action=* and selected ITOM namespaces. A sitemap index is published.",
+      "action": "Use kind docs_portal_toc."
+    },
+    {
+      "host": "admhelp.microfocus.com",
+      "finding": "Help pages are server-rendered HTML with the topic body in #mc-main-content. robots.txt lists per-product sitemaps (lr, lre, valueedge) and disallows older versions and some PDFs. HTML responses carry ETag and Last-Modified.",
+      "action": "Use kind sitemap, filtered to the current version path."
+    },
+    {
+      "host": "www.microfocus.com",
+      "finding": "The legal and terms page returned HTTP 403 to an automated fetch.",
+      "action": "Source terms remain unverified and require a manual review."
+    }
+  ],
+  "products": [
+    {"product_id": "1220", "product_name": "AutoPass License Server", "kind": "docs_portal_toc", "seed_url": "https://docs.microfocus.com/135/26.4/tocflat.json", "toc_topics": 162, "robots_allowed": 162},
+    {"product_id": "1268", "product_name": "Database Activity Monitoring", "kind": "docs_portal_toc", "seed_url": "https://docs.microfocus.com/2099/26.1/tocflat.json", "toc_topics": 113, "robots_allowed": 113},
+    {"product_id": "1176", "product_name": "Change Guardian", "kind": "docs_portal_toc", "seed_url": "https://docs.microfocus.com/21/6.3.3/tocflat.json", "toc_topics": 144, "robots_allowed": 144},
+    {"product_id": "1146", "product_name": "ArcSight Management Center (ArcMC)", "kind": "docs_portal_toc", "seed_url": "https://docs.microfocus.com/2302/26.2/tocflat.json", "toc_topics": 319, "robots_allowed": 319, "note": "Listed on the portal as SIEM Management Center Software; page JSON fetched successfully."},
+    {"product_id": "1204", "product_name": "GroupWise Disaster Recovery (Reload for GroupWise)", "kind": "docs_portal_toc", "seed_url": "https://docs.microfocus.com/2649/24.4/tocflat.json", "toc_topics": 64, "robots_allowed": 64},
+    {"product_id": "1167", "product_name": "iPrint", "kind": "docs_portal_toc", "seed_url": "https://docs.microfocus.com/27/26.4/tocflat.json", "toc_topics": 238, "robots_allowed": 238, "note": "Listed as iPrint Appliance; the 26.2 What's new page JSON was fetched end to end."},
+    {"product_id": "32", "product_name": "Content Manager (Records Manager/TRIM)", "kind": "docs_portal_toc", "seed_url": "https://docs.microfocus.com/544/26.4/tocflat.json", "toc_topics": 2173, "robots_allowed": 2173, "note": "Page JSON fetched successfully; the selection is capped."},
+    {"product_id": "1185", "product_name": "LoadRunner Professional", "kind": "sitemap", "seed_url": "https://admhelp.microfocus.com/lr/sitemaps/LR_sitemap.xml", "sitemap_urls": 985, "robots_allowed": 985},
+    {"product_id": "1184", "product_name": "LoadRunner Enterprise", "kind": "sitemap", "seed_url": "https://admhelp.microfocus.com/lre/sitemaps/Sitemap.xml", "sitemap_urls": 275, "robots_allowed": 275},
+    {"product_id": "22", "product_name": "ValueEdge", "kind": "sitemap", "seed_url": "https://admhelp.microfocus.com/valueedge/en/latest/Online/Sitemap.xml", "sitemap_urls": 885, "robots_allowed": 885}
+  ],
+  "excluded": [
+    {"product_id": "63", "product_name": "Static Application Security Testing (Fortify SAST)", "reason": "docs.microfocus.com/2263/26.4 tocflat.json and default.json returned HTTP 403."}
+  ],
+  "limitations": [
+    "Public access and robots.txt permission do not establish reuse rights; source terms remain unverified.",
+    "Bodies were inspected only to identify formats; no content has been ingested or indexed.",
+    "The page selection in the source map is capped at 30 pages per product; it is not a relevance review."
+  ]
+}

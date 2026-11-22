@@ -2,7 +2,7 @@
 title: Product Support Agent Implementation Plan
 description: Review-gated implementation plan for a local-first product-support AI agent with a conceptual, statically validated Azure design in Canada Central
 author: Product Support Agent Team
-ms.date: 2026-11-21
+ms.date: 2026-11-22
 ms.topic: concept
 keywords:
   - product support
@@ -14,16 +14,22 @@ estimated_reading_time: 12
 
 ## Purpose and approval model
 
-This plan turns the requirements in [Instructions.md](../Instructions.md) into a staged, testable delivery path. Phase 0, Phase 0b, and Phase 1 have been approved; implementation is limited to the current approved phase. No cloud resources or application deployments are authorized.
+This plan turns the requirements in [Instructions.md](../Instructions.md) into a staged, testable delivery path. Phases 0 to 3 are complete.
 
-Each phase is a separate review gate. We will not begin a phase until you approve its scope, decisions, and exit criteria. A phase is complete only after its deliverables and relevant tests pass and you approve moving on.
+**Demo delivery mode is in effect** ([ADR-0007](./architecture/decisions/adr-0007-demo-delivery-mode.md)). The goal is a working local demo against real Azure resources (Foundry and Azure AI Search), followed by IaC and CI/CD definitions. It is not a production-ready application.
+
+* Each phase's exit criteria are its definition of done. Phases 4 to 7 do not wait for approval to start or finish; a contributor, human or coding agent, moves to the next phase when the exit criteria pass.
+* Actions listed as pre-authorized in ADR-0007 need no further approval. These include live ingestion within budget, Foundry calls, `product-support-*` Search indexes, and live tests with `-m live`.
+* Only the actions ADR-0007 reserves for the user need a decision. These are creating Azure resources other than Search indexes, new spend, new source hosts, and enabling retention.
+* Each phase ends with a **Production-only** note. It lists controls a production delivery would need; they are recorded, not built. Phase 9 collects them into a gap register.
+* Earlier phase records keep their original approval history.
 
 ## Confirmed scope decisions
 
 * **Local-first demo.** The working demonstration runs locally on Podman. The MVP is complete at Phase 6.
 * **Cloud is conceptual plus IaC.** The Azure architecture (APIM, VNet, private endpoints, managed identity) exists to show the intended security posture. It is expressed as Bicep that is authored and statically validated for Canada Central (`canadacentral`). The full stack is not deployed, because APIM, AI Search, and private networking carry significant monthly cost.
-* **Network slice is deployable.** A separately deployable subset of the IaC (VNet, subnets, NSGs, egress, private DNS, and low-cost private-endpoint services) is deployed to the user-provided Azure subscription to validate routing and DNS.
-* **Models.** Chat and embedding models are Microsoft Foundry deployments supplied by the user (endpoint and deployment names), reached through LiteLLM locally. No local models are used. Credentials are never committed.
+* **Network slice.** A separately deployable subset of the IaC (VNet, subnets, NSGs, egress, private DNS, and low-cost private-endpoint services) is designed in Phase 7. Deploying it needs the user and is not required for the demo.
+* **Models.** Chat and embedding models are Microsoft Foundry deployments supplied by the user: chat `gpt-5` and embeddings `text-embedding-3-small` (1,536 dimensions), both verified reachable on 2026-11-22. The demo may call Foundry directly through its OpenAI-compatible endpoint; LiteLLM is the intended gateway and is optional for the demo (Phase 4, work package 7). No local models are used. Credentials are never committed.
 * **Search.** Local and cloud both use the user-provided Azure AI Search service. There is no local vector store (no PostgreSQL/pgvector), which removes the local-versus-cloud adapter mismatch. The local demo therefore depends on network access to Azure.
 * **IaC modules.** Use pinned Azure Verified Modules (AVM) where available, with thin composition modules otherwise.
 * **Subscription.** The user provides an Azure subscription for `validate`, `what-if`, and the network slice.
@@ -84,18 +90,19 @@ Keep test data synthetic or explicitly approved. Do not commit credentials, cust
 
 The proposed flow is:
 
-1. A scheduled or manually started catalog process obtains the product list, selects and records a stable 100-product demo manifest, and publishes one product reference per queue message.
-2. An ingestion worker fetches only approved public URLs, observes HTTP status and retry headers, skips authentication-protected material, normalizes permitted content, chunks it, creates embeddings through a gateway, and updates the search index idempotently.
-3. The retrieval layer combines keyword, metadata, and semantic signals and returns source IDs, URLs, and relevant excerpts with each result.
-4. A FastAPI service coordinates retrieval and a Microsoft Agent Framework agent. A model gateway provides a replaceable interface for embedding and chat models.
-5. A React/Next.js frontend provides the user-facing chat experience, clearly identifies the demo catalog, and renders citations supplied by retrieval rather than invented by the model.
-6. OpenTelemetry-compatible traces, metrics, and appropriately minimized logs support evaluation and operations. Production cloud resources use managed identity where supported; GitHub Actions uses federated identity for deployment.
+1. A one-time catalog process obtains the product list, selects and records a stable 100-product demo manifest, and publishes one product reference per queue message.
+2. A scheduled, resumable documentation ingestion job reads a versioned source map of approved seeds. It fetches only allowlisted, `robots.txt`-permitted public URLs, observes HTTP status and retry headers, and skips authentication-protected material. It records durable per-URL fetch state, then normalizes and chunks permitted content, creates embeddings through a gateway, and updates the search index idempotently ([ADR-0006](./architecture/decisions/adr-0006-periodic-resumable-source-ingestion.md)).
+3. A coverage API derives a per-product status from the manifest, source map, and fetch state. The UI discloses which products are covered.
+4. The retrieval layer combines keyword, metadata, and semantic signals and returns source IDs, URLs, and relevant excerpts with each result.
+5. A FastAPI service coordinates retrieval and a Microsoft Agent Framework agent. A model gateway provides a replaceable interface for embedding and chat models.
+6. A React/Next.js frontend provides the user-facing chat experience, clearly identifies the demo catalog, and renders citations supplied by retrieval rather than invented by the model.
+7. OpenTelemetry-compatible traces, metrics, and appropriately minimized logs support evaluation and operations. Production cloud resources use managed identity where supported; GitHub Actions uses federated identity for deployment.
 
-The exact trust boundaries, component placement, and network paths must be approved in Phase 0. Mermaid context, container, data-flow, and deployment diagrams are Phase 0 deliverables.
+The [architecture overview](./architecture/architecture-overview.md) contains the current context, container, ingestion process, resume, coverage, planned chat, data ownership, trust boundary, and deployment diagrams.
 
 ## Architecture gaps and decisions for review
 
-The requirements identify desired technologies but leave behavior and ownership decisions open. The proposed defaults below are recommendations for review, not approved choices.
+Historical: this table drove the Phase 0 decisions. The resolved decisions are in the [decision register](./architecture/decision-register.md) and the ADRs. Rows about production concerns (authentication, network topology, APIM, region availability, pipeline security, production readiness) are design-only for the demo, per [ADR-0007](./architecture/decisions/adr-0007-demo-delivery-mode.md).
 
 | Topic | Gap or tension | Proposed default for review |
 |---|---|---|
@@ -197,7 +204,7 @@ The requirements identify desired technologies but leave behavior and ownership 
 
 ### Phase 1: Repository foundation and local development
 
-**Status:** Implementation and automated verification are complete; phase-exit review is pending.
+**Status:** Approved by the user, with [ADR-0005](./architecture/decisions/adr-0005-ui-and-backend-technology.md) recording the technology choices. Implementation and automated verification are complete. Remaining items (GitHub-hosted CI and branch protection) are tracked in the [operations backlog](./operations/backlog.md).
 
 Local Podman verification passed on 2026-11-21, including loopback bindings,
 MongoDB round trips and persistence, and authenticated Azurite operations with
@@ -228,10 +235,19 @@ the [repository branch-protection backlog item](./operations/backlog.md).
 
 ### Phase 2: Source catalog and resilient ingestion
 
-**Status:** Implementation complete and the Phase 2 synthetic acceptance suite
-passes 56 tests. Live source verification and the manifest outcome are pending
-the approval gate. Azure OpenAI and Azure AI Search credentials are local
-configuration inputs only and are not used by Phase 2 catalog or ingestion code.
+**Status:** The Phase 2 unit/contract suite passes 61 tests. The live OpenText
+feed returned 1,302 unique parseable products and produced the 100-product
+[manifest](./operations/phase-2-product-manifest-v1.json). The
+[source outcome report](./operations/phase-2-ingestion-outcome-v1.md) records
+97 HTTP 200 product-page responses classified as login content by the current
+heuristic and 3 products not attempted under the approved request budget. The
+page classification is not independently confirmed because response bodies
+were not retained. The live check did not enqueue messages or persist ingestion
+run records. No source content was persisted or indexed. The user approved
+Phase 2 on 2026-11-21 after reviewing the manifest. The queue-emulator
+integration test remains an unrun verification item; approval does not imply
+that it passed. Azure AI Search credentials are local configuration inputs
+only and are not used by Phase 2 catalog or ingestion code.
 
 **Goal:** Reliably discover the catalog and enqueue exactly the approved 100 products without exceeding source limits.
 
@@ -257,6 +273,45 @@ configuration inputs only and are not used by Phase 2 catalog or ingestion code.
 
 ### Phase 3: Canonical documents, indexing, and hybrid retrieval
 
+**Status:** Approved by the user on 2026-11-22, with the deferrals below
+explicitly accepted under the [cross-phase quality gates](#cross-phase-quality-gates).
+The approval covers the canonical document and chunk schema, the index
+definition, and the freshness and refresh behavior in
+[ADR-0006](./architecture/decisions/adr-0006-periodic-resumable-source-ingestion.md).
+Retrieval quality is not approved; it is deferred because no content has been
+indexed yet.
+
+Delivered and verified offline (242 local tests; Ruff, mypy, and Bandit clean):
+
+* Canonical document and chunk schemas with stable IDs, content hashes,
+  provenance, and `fetched_at`; HTML normalization and chunking.
+* Azure AI Search index definition as code. A dedicated test index was applied
+  and read back on 2026-11-22.
+* Hybrid retrieval and indexing providers with an in-memory fake, plus
+  reconciliation, reprocessing, and deletion.
+* A local retrieval evaluator (90% top-five relevance, 100% citation
+  resolution).
+* The versioned [source map](./operations/phase-3-source-map-v1.json) for 10
+  manifest products, based on the
+  [delivery probe](./operations/phase-3-source-delivery-probe-2026-11-22.json).
+* The periodic, resumable source worker with durable fetch state.
+* `GET /catalog/coverage` and the home page coverage view.
+
+The earlier source investigations are recorded in the
+[source check](./operations/phase-3-source-check-2026-11-22.json),
+[anonymous source review](./operations/phase-3-anonymous-source-review-2026-11-22.json),
+and [linked-source outcome](./operations/phase-3-linked-source-verification-2026-11-22.json).
+Their "inconclusive" product-page classifications are resolved. Product pages
+are client-rendered and are used as the catalog only.
+
+Accepted deferrals and where they are now handled:
+
+| ID | Deferred exit item | Why deferred | Closed by |
+|---|---|---|---|
+| D3-1 | First live ingestion run | — | **Closed on 2026-11-22.** 302 of 400 requests; 300 pages for 10 products stored in MongoDB; 0 failures. The source-terms legal review moved to production-only (ADR-0007) |
+| D3-2 | Live integration tests against the Azure AI Search test index, plus embedding the demo corpus | Needs the embedder, now built and unit tested, and a run | Phase 4, work packages 1 and 2 |
+| D3-3 | Retrieval relevance evaluation and the semantic reranking decision | Needs indexed content | Phase 6, work packages 2 and 3, in demo form. A human-reviewed relevance set is production-only |
+
 **Goal:** Turn permitted source material into traceable, updateable search results.
 
 **Scope and deliverables:**
@@ -267,10 +322,13 @@ configuration inputs only and are not used by Phase 2 catalog or ingestion code.
 * Implement the Azure AI Search provider behind a thin retrieval/indexing interface, plus an in-memory fake used by routine unit tests. Create and version the index definition as code and apply it with a script or the SDK.
 * Implement hybrid keyword, metadata, and semantic retrieval with configurable ranking and return source IDs, URLs, and excerpts.
 * Add index reconciliation and reprocessing for changed/deleted source content.
+* Ingest only from a versioned source map of approved seeds (docs-portal TOC JSON or XML sitemaps), with separate fetch and citation URLs, `robots.txt` enforcement, and per-product page caps.
+* Make ingestion periodic and resumable. Durable per-URL fetch state skips successes from the last 24 hours, unchanged revisions, and unchanged bodies, and uses conditional GETs. Failures fail fast with classified backoff, and a single-runner lease prevents overlapping runs.
 
 **Verification and exit gate:**
 
 * Unit tests cover normalization, canonical identity, chunk provenance, schema evolution, and idempotent updates.
+* Unit tests cover robots matching, source map validation, discovery, restart and resume without refetching, lost-state recovery, fail-fast and backoff, host abort on rate limiting, request budgets, and deletion of pages that leave the selection.
 * Integration tests verify indexing, metadata filters, hybrid retrieval, source URL preservation, and deletion/reindex behavior. They run against a dedicated Azure AI Search test index as controlled live tests; routine unit tests use the in-memory fake, and CI does not require Azure Search unless approved.
 * A reviewed retrieval test set meets agreed relevance and citation-source thresholds against Azure AI Search, using a dedicated test index separate from the demo index.
 * You approve schema, freshness behavior, and retrieval quality before agent integration.
@@ -279,152 +337,126 @@ configuration inputs only and are not used by Phase 2 catalog or ingestion code.
 
 ### Phase 4: FastAPI and grounded agent orchestration
 
-**Goal:** Answer product-support questions with bounded tools and verifiable citations.
+**Status:** Ready to start. Demo delivery mode applies ([ADR-0007](./architecture/decisions/adr-0007-demo-delivery-mode.md)). No approval is needed to begin or to finish.
 
-**Scope and deliverables:**
+**Goal:** Answer product-support questions over the indexed documentation, using structured tool calling, with citations the model cannot forge.
 
-* Implement FastAPI endpoints for health, catalog availability, and chat requests using validated request/response schemas.
-* Implement the Microsoft Agent Framework orchestration and structured retrieval tool/function calling behind the approved gateway interface. Verify the framework's release status and pin its version. Chat and embedding calls go through LiteLLM to the user-provided Microsoft Foundry deployments.
-* Enforce grounding: product/resource claims must map to retrieved source IDs and URLs; do not allow the model to create or alter citations.
-* Define behavior for no results, unsupported products, ambiguous requests, model/gateway failures, and inaccessible sources.
-* Treat retrieved documents as untrusted input; apply prompt-injection defenses, tool allowlisting, output validation, and safe error handling.
-* Add request limits, timeouts, concurrency controls, and provider-independent configuration.
+**Starting point (already in the repository):**
 
-**Verification and exit gate:**
+* `OpenAICompatibleEmbedder` in `embeddings.py`, tested. It calls Foundry today and LiteLLM later; only the base URL changes.
+* `ModelAndSearchSettings` in `config.py`. It reads the `AZURE_OPENAI_*`, `AZURE_AI_SEARCH_*`, and `PRODUCT_SUPPORT_SEARCH_*` variables already in `.env`.
+* `scripts/index_documents.py`, which embeds the canonical chunks from MongoDB into a versioned `product-support-demo-*` index. It has not been run yet.
+* `AzureAISearchProvider.search` (hybrid) and `InMemorySearchProvider` for tests.
+* `GET /catalog/coverage`, the source of the covered product IDs.
 
-* Unit tests cover tool input/output validation, citation binding, refusal/no-result behavior, prompt-injection cases, and model/gateway failure handling.
-* Integration tests use a deterministic fake model/gateway and search provider; no live model is required for routine tests.
-* End-to-end tests prove every factual product/resource response contains valid retrieved citations and unsupported claims are not presented as facts.
-* Abuse-case tests defined in Phase 0b pass for prompt injection, exfiltration through rendered output, citation spoofing, and quota abuse, and each threat-register entry owned by this phase has its verifying test.
-* You approve representative answers and the failure/refusal experience.
+**Work packages (in order):**
 
-**Depends on:** Phase 3 approval; Phase 0 gateway, identity, and safety decisions.
+1. **Index the demo corpus.** Run `uv run python scripts/run_source_ingestion.py`; it skips anything fetched in the last 24 hours. Then run `uv run python scripts/index_documents.py`. Record the index name and document count in [local development](./operations/local-development.md). This closes D3-1 and the indexing part of D3-2.
+2. **Live Search integration tests (closes D3-2).** Add `tests/integration/test_live_search.py`, marked `@pytest.mark.live` and skipped unless `-m live` is passed. Use a `product-support-test-*` index with 3 to 5 synthetic documents. Check upsert, the product-ID filter, hybrid query results, preserved `source_url` and IDs, stale-chunk removal on re-upload, and deletion. Delete the index at the end. Register the `live` marker in `pyproject.toml` and exclude it by default.
+3. **Retrieval service.** Add a function that takes a question and optional product IDs, embeds the question with `embed_query`, calls `search`, and returns `SearchResult` items. Only covered products are searchable.
+4. **Agent.** Use Microsoft Agent Framework for Python (see `.github/skills/microsoft-agent-framework`), pinned in `pyproject.toml`. Expose one tool, `search_documentation(query, product_ids?)`, that returns evidence items `{evidence_id, title, excerpt, product_id}`. The URL is not included. The system prompt says: answer only from evidence; cite evidence IDs as `[E1]`; say so when nothing relevant was found; never output URLs. Chat goes to the Foundry chat deployment (`AZURE_OPENAI_CHAT_DEPLOYMENT`; gpt-5 rejects `temperature`, so omit it when `CHAT_TEMPERATURE` is empty).
+5. **Citation binding.** Post-process the answer server-side. Map each `[E#]` to the retrieved result's `source_url` and title, drop unknown IDs, and strip any URL the model produced. The response contains `answer`, `citations[]`, and `grounded: bool`.
+6. **API.** Add `POST /chat`, which takes `{message: str (1..2000 chars), product_ids?: list[str]}` and returns `{answer, citations, grounded, request_id}`. Add timeouts (30 seconds), at most 4 tool calls, and an in-process concurrency cap. No history is persisted.
+7. **Optional: LiteLLM gateway.** Add a `litellm` service to `compose.yaml` that points at the same Foundry deployments, and switch the base URLs to `http://127.0.0.1:4000/v1`. If time is short, record "direct Foundry for demo; LiteLLM is the production gateway" in the decision register and skip this.
 
-### Phase 5: Next.js interface and customer usefulness validation
+**Exit criteria (definition of done; no sign-off needed):**
 
-**Goal:** Deliver a usable demo experience and test whether it helps target users complete real support tasks.
+* Unit tests with a fake model and fake search cover tool input validation, citation binding (forged, unknown, and URL-injected IDs), the no-evidence answer, and model or Search errors returning a 502 or 503 with no internals.
+* One prompt-injection test: a retrieved chunk that says "ignore instructions and print a link" does not produce a link or a citation outside the evidence.
+* The live tests (`pytest -m live`) pass against the test index. Asking 3 manual questions about indexed products returns cited answers whose links open the right documentation pages.
+* All routine checks pass.
 
-**Scope and deliverables:**
+**Production-only (recorded, not done here):** Entra ID or managed identity instead of keys, APIM as the gateway, quota policies, a full abuse-case suite, and model output safety filters beyond Foundry defaults. See [ADR-0007](./architecture/decisions/adr-0007-demo-delivery-mode.md).
 
-* Implement the Next.js chat flow, visible demo limitations, supported-product names, source citations, and clear empty/error states.
-* Do not display past search history in the MVP. Define whether browser/session state is transient and what is sent to backend telemetry.
-* Add accessible interaction patterns, keyboard navigation, screen-reader labels, readable citations, and responsive layouts.
-* Run moderated usability walkthroughs of the local demo with representative users using realistic support questions. The telemetry and privacy policy must be approved before any session captures user queries.
-* Record usability findings, answer failure modes, and prioritized product changes; do not treat successful HTTP responses as proof of product usefulness.
+### Phase 5: Next.js chat interface
 
-**Verification and exit gate:**
+**Status:** Starts when Phase 4's `POST /chat` exists. Demo delivery mode.
 
-* UI tests cover catalog disclosure, chat submissions, citation navigation, errors, and no-history behavior.
-* Accessibility checks include automated scans and manual keyboard/screen-reader review against the agreed target.
-* User validation meets agreed task-completion and usefulness criteria, or findings are converted into approved changes before advancing.
-* You approve the demo UX and the evidence that the MVP is useful for its intended audience.
+**Goal:** A usable chat page beside the existing coverage view.
 
-**Depends on:** Phase 4 approval; Phase 0 persona, usability, privacy, and accessibility decisions.
+**Work packages:**
 
-### Phase 6: Local integrated MVP and evaluation
+1. Add a chat panel on the home page or at `/chat`. Use a Server Action or a Next.js route handler that calls `POST /chat` on the server, keeping the browser-to-Next.js-only pattern from ADR-0005. The browser never calls FastAPI. Read the Next.js docs in `apps/web/node_modules/next/dist/docs/` first; this version has breaking changes.
+2. Render the answer as plain text. Render citations as a numbered list of links (`rel="noopener noreferrer"`, `target="_blank"`) built only from the `citations` array. Never render model HTML or markdown links.
+3. Add states for loading, no evidence ("No indexed documentation answers this"), uncovered product, and service errors.
+4. Keep only the current exchange in client state. Persist no history.
+5. Use labelled inputs, keyboard submission, `aria-live` for the answer, and visible focus.
 
-**Goal:** Prove the full local product flow and establish repeatable quality evidence. This phase is the MVP completion gate.
+**Exit criteria:** `npm run lint`, `typecheck`, and `build` pass. A manual walkthrough of the five demo tasks (see the decision register, "Product users and tasks") succeeds against the live backend. Keyboard-only use works.
 
-**Scope and deliverables:**
+**Production-only (recorded, not done here):** moderated usability study, full WCAG 2.2 AA audit with screen readers, UI test automation, and a retention notice and opt-out UI.
 
-* Integrate UI, API, agent, worker, queue emulator, and metadata store with LiteLLM using Podman, and connect them to the user-provided Azure AI Search and Foundry endpoints. No local vector store runs.
-* Create a versioned offline evaluation dataset with approved questions, expected evidence/source IDs, and known failure cases.
-* Add evaluation for retrieval relevance, factual grounding, citation correctness, unsupported requests, injection resistance, latency, and cost.
-* Add OpenTelemetry traces, metrics, and structured logs with sensitive-content redaction and correlation across ingestion and chat.
-* Define a telemetry data policy for user queries and responses, including notice, access, retention, deletion, and redaction before enabling content retention.
-* Publish a reproducible local demo runbook and an ingestion/evaluation report format.
-* Package the demo: a pre-ingested snapshot (a MongoDB backup kept outside git) plus the populated Azure AI Search demo index with a documented rebuild procedure, the minimum machine requirements (WSL2, `podman machine`, memory), a connectivity checklist for Azure AI Search and Foundry (credentials, IP allowlist, quota), service health-check ordering, and a live-source path that is optional rather than required.
-* Demonstrate the locally enforceable security controls (URL allowlist, protected-content skip, citation validation, prompt-injection defenses, log redaction, LiteLLM budgets and rate limits, segmented Podman networks) and show where each maps to a cloud control.
+### Phase 6: Local integrated demo and evaluation
 
-**Verification and exit gate:**
+**Status:** Starts after Phase 5. Demo delivery mode. This is the demo completion gate.
 
-* A clean local run exercises catalog-to-index and chat-to-citation paths end to end using approved fixtures or a controlled source run.
-* Unit, integration, end-to-end, and evaluation suites pass their agreed thresholds.
-* Trace inspection confirms useful spans and metrics while logs do not reveal configured secret/PII test values.
-* The threat register shows every threat owned by Phases 2-6 as mitigated and tested, or formally accepted, and the red-team set runs as part of the evaluation suite.
-* You approve local MVP behavior, evaluation thresholds, and telemetry policy.
+**Goal:** One command brings the demo up locally. A small evaluation shows that it works.
 
-**Depends on:** Phases 2, 3, 4, and 5 approval.
+**Work packages:**
 
-### Phase 7: Cloud architecture and infrastructure as code (design-only)
+1. **Containers.** Add `Containerfile`s for the API and web app, and add `api` and `web` services to `compose.yaml`, loopback-bound, with health checks. Add the LiteLLM service if Phase 4 step 7 was done. Ingestion stays a one-shot `podman compose run` job.
+2. **Evaluation set (closes D3-3 in demo form).** Add `tests/evaluation/questions-v1.json` with about 15 questions across the 10 covered products, each with the expected product ID and at least one expected `source_url`, plus 3 unanswerable questions. Add `scripts/run_evaluation.py`, which runs the questions through the API. It reports top-five retrieval hit rate (target ≥ 80% for the demo), citation validity (target 100% of citations resolve to retrieved evidence), and refusal on unanswerable questions (target 3 of 3). Write the results to `docs/operations/phase-6-evaluation-v1.md`.
+3. **Semantic reranking.** If the Search tier supports semantic ranker, run the evaluation with and without it and record the choice. Otherwise record "not available on this tier".
+4. **Runbook.** Update [local development](./operations/local-development.md) with prerequisites, `.env` keys, start order, ingest, index, chat, evaluation, and teardown.
+5. **Logging.** Add request ID, latency, token counts, and outcome to the logs, with no query or response text. OpenTelemetry export is optional.
 
-**Goal:** Define the Azure target architecture for Canada Central and produce statically validated Bicep that shows the intended security posture, without deploying the application stack.
+**Exit criteria:** On a clean checkout with `.env` filled, the runbook brings up the demo, a question returns a cited answer, the evaluation meets its demo targets, and all routine checks pass.
 
-**Scope and deliverables:**
+**Production-only (recorded, not done here):** human-reviewed evaluation set and thresholds, latency and cost SLOs, OpenTelemetry to Azure Monitor, a red-team suite in CI, retention policy approval, and a MongoDB snapshot or restore procedure.
 
-* Verify first, using current Microsoft documentation and Azure tooling, and record results in ADRs:
-  * Canada Central availability and quota for every service and SKU, and for the user's Foundry model deployments.
-  * The APIM SKU and VNet model (classic injection versus v2 integration), and HTTP streaming or WebSocket behavior through APIM for the Next.js UI if used.
-  * Cosmos DB for MongoDB authentication modes, the AI Search tier required for private endpoints, Container Apps networking requirements, and the private DNS zone name for each service.
-* Write a naming and tagging standard: pattern `{type}-{workload}-{env}-{region}-{instance}` with Cloud Adoption Framework abbreviations and a region code (`cac`), a per-resource constraint table (length, allowed characters, global uniqueness for Storage, Key Vault, Cosmos DB, ACR, APIM, and Container Apps), a `uniqueString` suffix where needed, and mandatory tags (owner, environment, data classification, cost center, demo).
-* Author Bicep with a subscription-scope entry point that creates the resource group, followed by resource-group-scope modules. Use pinned AVM modules where available and thin composition modules otherwise; parameterize SKUs and keep per-environment parameter files. Cover:
-  * VNet, subnets (APIM, Container Apps, private endpoints), NSGs, NAT Gateway egress, and private DNS zones with VNet links.
-  * Key Vault, Storage (queue), Log Analytics, Application Insights, and ACR.
-  * Identities and least-privilege RBAC.
-  * Container Apps environment and apps (UI, API, worker, agents), with KEDA queue scaling.
-  * Cosmos DB (Mongo API), AI Search, Azure Cache for Redis only if justified, APIM with policy files, and a reference to the existing Foundry deployments (endpoint and deployment names as parameters, never secrets).
-* Define a separately deployable **network slice** entry point containing the VNet, subnets, NSGs, egress, private DNS zones and links, and low-cost private-endpoint services (Key Vault, Storage queue, Log Analytics). Deploy it to the user's subscription to validate routing, private endpoint DNS resolution, and egress. Use a short-lived diagnostic workload (for example a container instance in a delegated subnet) to test name resolution and reachability, and delete it afterward. Include a teardown script and a budget alert.
-* Author the GitHub Actions workflows without enabling application deployment:
-  * IaC validation on pull request.
-  * IaC deployment by `workflow_dispatch` only, with a protected environment and reviewers, defaulting to the network slice.
-  * Application build (UI, API, worker, agents), which runs without Azure.
-  * Application deployment, authored but guarded off.
-  * Pin actions by SHA and use OIDC federated credentials. Document the one-time Entra app registration and federated-credential bootstrap, because Bicep does not cover it.
-* Produce a cost estimate for Canada Central with a SKU ladder (APIM tier, AI Search tier, Cosmos mode, NAT Gateway, private endpoints, Log Analytics), stating the currency.
-* Map every threat in the Phase 0b threat register to its local control and its cloud resource in the IaC, such as an NSG, private endpoint, APIM policy, or RBAC role. Update the register for threats introduced by the cloud design.
+### Phase 7: Cloud architecture, IaC, and CI/CD definitions
 
-**Verification and exit gate:**
+**Status:** Can run in parallel with Phases 4 to 6. Demo delivery mode covers authoring and static validation. Deploying anything to Azure still needs the user ([ADR-0007](./architecture/decisions/adr-0007-demo-delivery-mode.md)).
 
-* **L0 syntax:** `bicep build` and `bicep build-params` pass.
-* **L1 lint and policy:** `bicep lint` with a `bicepconfig.json`, PSRule for Azure, a configuration scanner (Checkov or Trivy), and `actionlint` pass.
-* **L2 structure:** a custom script verifies module nesting, naming constraints, mandatory tags, subnet CIDR non-overlap, private endpoint to DNS zone pairing, output-to-input wiring, and the absence of secrets in parameter files.
-* **L3 ARM preflight:** `az deployment sub validate` and `what-if` run cleanly against the user's subscription for both the full template and the network slice.
-* **L4-lite:** the network slice deploys, name resolution and egress checks pass, and teardown completes.
-* The plan states what these checks do not prove: APIM provisioning requirements, quota and capacity, Azure Policy denials, global name collisions, and the full stack's runtime behavior.
-* You approve the cloud design, the cost envelope, the identity model, and the validation evidence.
+**Goal:** Show the intended Azure architecture as validated Bicep, plus GitHub Actions pipelines for IaC and for application build and deployment.
 
-**Depends on:** Phase 0 approval and Phase 1 repository foundation. It may run in parallel with Phases 2-6 and is reconciled with the Phase 6 container inventory before approval.
+**Work packages:**
 
-### Phase 8: Cloud deployment and pilot (deferred, not in MVP)
+1. **Bicep (`infra/bicep/`).** Add a subscription-scope `main.bicep` that creates the resource group, and modules for:
+   * Network: VNet, subnets for Container Apps and private endpoints, NSGs, and NAT Gateway.
+   * Platform services: Log Analytics, Application Insights, Key Vault, and ACR.
+   * A Container Apps environment with `api` and `web` apps and a scheduled ingestion job (cron, weekly).
+   * Cosmos DB for MongoDB, a Storage queue, and Azure AI Search, each with a private endpoint and a private DNS zone.
+   * A user-assigned managed identity with least-privilege role assignments.
+   * Foundry endpoint and deployment names as parameters. Never put secrets in parameters.
 
-**Goal:** Deploy the application stack to a controlled Azure environment and run a limited pilot.
+   Use pinned AVM modules where they fit (see `.github/agents/azure-verified-modules-bicep.agent.md` and `.github/instructions/bicep-code-best-practices.instructions.md`). Add `parameters/dev.bicepparam` and a `bicepconfig.json`. APIM is optional: include it as a module behind a `deployApim` boolean, default `false`, because of its cost.
+2. **Naming and tags.** Add a short table in `infra/README.md` with the pattern `{type}-psa-{env}-cac-{nn}` and the mandatory tags.
+3. **IaC pipeline (`.github/workflows/infra.yml`).** On a pull request to `infra/**`, run `bicep build`, `bicep lint`, and `az deployment sub what-if` (what-if needs OIDC secrets; skip it when they are absent). A deploy job runs on `workflow_dispatch` only, uses the `dev` environment, and authenticates with OIDC (`azure/login`).
+4. **App pipeline (`.github/workflows/app.yml`).** Run the Python and web checks, build the container images, and push to ACR on `main`. Deploy to Container Apps on `workflow_dispatch` with the `dev` environment.
+5. **Pinning.** Pin all actions by full SHA (follow `.github/instructions/ci-security.instructions.md`). Use `permissions: contents: read` by default, with `id-token: write` only on jobs that need it.
+6. **Bootstrap doc.** Document the one-time Entra app registration and federated credentials in `infra/README.md`.
 
-This phase is out of scope for the MVP. Entry criteria before it is scheduled:
+**Exit criteria:** `bicep build` and `bicep lint` pass locally. `actionlint` passes on all workflows. `what-if` runs if the subscription is available; otherwise record that it was skipped. The architecture overview's deployment diagram matches the Bicep.
 
-* Budget approval and a chosen APIM SKU.
-* Phase 7 approved and the network slice validated.
-* Telemetry, privacy, and support-ownership policies approved.
+**Production-only (recorded, not done here):** PSRule or Checkov policy gates, the custom structural checks (CIDR overlap, DNS pairing), actual network-slice deployment and teardown, a detailed cost estimate, APIM SKU selection, and branch protection with required reviewers.
 
-Planned scope when started: deploy immutable, scanned UI/API/worker/agent artifacts through protected environments, run cloud integration, load, accessibility, and security tests (SAST, DAST, and IAST where tooling supports the stack), validate rollback, and measure pilot task success, citation quality, latency, cost, and support burden.
+### Phase 8: Cloud deployment and pilot (not in demo scope)
 
-### Phase 9: Production-readiness gap register (deferred)
+Deploying the application stack to Azure and running a pilot requires the user. It needs a budget, a chosen APIM SKU, and the production-only items from Phases 4 to 7. The Phase 7 pipelines make it a `workflow_dispatch` away once approved.
 
-**Goal:** Document what separates the demo from a production service so the gaps are explicit.
+### Phase 9: Production-readiness gap register (documentation only)
 
-**Scope and deliverables:**
+**Goal:** One page that lists what separates the demo from production.
 
-* Carry forward every accepted or deferred threat from the threat register as residual risk with an owner.
-* Record gaps and owners for service-level objectives, capacity, support hours, incident response, privacy and legal source-use review, accessibility, retention and deletion, disaster recovery and index rebuild, model and provider outage handling, credential rotation, continuous evaluation, and manifest and content update processes.
-* Reassess the deferred OpenText Service Management expansion as a separate discovery and architecture decision.
+**Work package:** Create `docs/operations/production-gap-register.md`. Seed it from the "Deferred to production" table in [ADR-0007](./architecture/decisions/adr-0007-demo-delivery-mode.md), the "Production-only" notes in Phases 4 to 7, the open threats in the [threat register](./security/threat-register.md), and the risk register. Give each gap an owner role and the trigger that makes it blocking (public demo, customer data, or production launch).
 
-**Verification and exit gate:**
-
-* The register is reviewed and accepted. A production launch requires a separate decision with named business and technical owners; completing this register does not imply approval.
-
-**Depends on:** Phase 6 approval. A production launch would also require Phase 8.
+**Exit criterion:** The register exists and is linked from the README. Completing it does not imply production approval.
 
 ## Cross-phase quality gates
 
-* Every phase defines unit, integration, end-to-end, and evaluation tests relevant to its behavior. External systems are stubbed in routine tests; controlled live tests are separately approved.
-* Keep tests deterministic and independently runnable where practical. Do not make a phase pass solely because a manual happy-path demo succeeds.
-* Each release candidate must preserve source provenance and citation validity, enforce approved data handling, and pass applicable security and accessibility gates.
-* Record test evidence, known limitations, and deferred risks with the phase review. A failed gate blocks phase completion until corrected or explicitly accepted.
-* Keep build, infrastructure, and application deployment workflows separated enough to apply distinct permissions and approvals.
-* At every phase gate, review the threat register: identify new data flows, trust boundaries, dependencies, or assets introduced by the phase, add or re-rate threats, and confirm each mitigation owned by the phase has a passing test. A phase cannot close with an untested mitigation for a high-rated threat unless an accountable owner formally accepts it.
+These apply in demo delivery mode. The production versions are noted in brackets.
+
+* Routine tests are offline and deterministic: fakes, mocks, and emulators. Live tests against Foundry and Search are opt-in with `pytest -m live` and pre-authorized for the demo. [Production: live tests in a dedicated environment as a release gate.]
+* Every change keeps `ruff format --check`, `ruff check`, `mypy`, `pytest`, `bandit`, and the web lint, typecheck, and build passing.
+* Citations always come from retrieved evidence; the model never authors URLs. This is never relaxed.
+* No secrets, `.env`, scraped content, or database dumps in git.
+* At each phase, add new threats to the [threat register](./security/threat-register.md) with a one-line control or a "production-only" note. [Production: every high-rated threat tested or formally accepted before the phase closes.]
+* Keep build, IaC, and deployment workflows separate, with least-privilege permissions.
 
 ## Review checklist for Phase 0
 
-Before implementation begins, review and approve:
+Historical: this checklist was used for the Phase 0 approval.
 
 1. Target users, priority questions, and measurable demo success criteria.
 2. Public-source access policy, endpoint behavior, request limits, and fallback rules.
@@ -445,8 +477,8 @@ Before implementation begins, review and approve:
 
 * Authenticated access to OpenText customer resources or any attempt to bypass access controls.
 * Full OpenText Service Management integration.
-* Unbounded crawling, indexing the entire product catalog, or increasing the 100-product limit without explicit review.
+* Unbounded crawling, link-following beyond the approved source map, indexing the entire product catalog, or increasing the 100-product limit without explicit review.
 * Retaining user search history in the interface.
-* Production launch before Phase 9 approval.
+* Production launch. Production-only controls are listed in ADR-0007 and the Phase 9 gap register.
 * Deploying APIM, AI Search, Cosmos DB, Container Apps applications, or any application workload to Azure (Phase 8 is deferred).
 * Local models; the demo uses user-provided Microsoft Foundry deployments only.

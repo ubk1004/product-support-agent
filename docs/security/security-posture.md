@@ -2,7 +2,7 @@
 title: Product Support Agent Security Posture
 description: Distinguishes controls planned for the local MVP from cloud controls that are design-only
 author: Product Support Agent Team
-ms.date: 2026-11-21
+ms.date: 2026-11-22
 ms.topic: concept
 keywords:
   - security posture
@@ -31,11 +31,34 @@ network-slice test explicitly exercises them.
 | Local exposure | MongoDB and Azurite ports bound to `127.0.0.1`; the API run command binds to `127.0.0.1` | Podman listener check on 2026-11-21 | MongoDB runs without authentication and relies on loopback binding |
 | Retention off by default | `query_response_retention_enabled=false`; enabling it requires a reviewer role | Configuration unit tests | No retention feature exists yet |
 
+## Phase 3 implemented controls
+
+| Control | Implementation | Local evidence | Not yet verified |
+|---|---|---|---|
+| Source scope | Versioned source map; seeds validated against the host allowlist; no link or sitemap-index following | `test_phase_three_sources.py` | Live run pending authorization |
+| robots.txt | RFC 9309 matcher with wildcards; fetched once per host per run; fails closed except on 404/410 | Robots and worker tests | Live hosts |
+| Request limits | Per-run budget, 1-second spacing per host, 2 attempts per page, `Retry-After` cap, host abort on 429 | `test_phase_three_source_ingestion.py` | Live hosts |
+| Idempotent refresh | Durable fetch state, 24-hour freshness skip, conditional GETs, body hash, single-runner lease | Resume, lost-state, ETag, and lease tests | MongoDB under concurrent runs |
+| Protected content | Login-wall heuristic; protected pages skipped with a 30-day backoff and not stored | Heuristic and worker tests | Live pages |
+| XML parsing | `defusedxml` with DTDs forbidden | Sitemap tests; Bandit clean | — |
+| Coverage disclosure | Metadata-only API; server-side fetch from Next.js; fails safe to "assume nothing is covered" | Coverage tests; manual render of the available and unreachable states | Accessibility review in Phase 5 |
+
+## Demo delivery mode
+
+Per [ADR-0007](../architecture/decisions/adr-0007-demo-delivery-mode.md), the
+demo enforces the guardrails in that ADR (no secrets in git, anonymous access
+only, the source map with `robots.txt` and budgets, citation binding, retention
+off, loopback binding, offline routine tests). Controls in the "Cloud target"
+column below, and the production-only items in each phase of the
+[implementation plan](../implementation-plan.md), are designed but not
+performed. API keys from `.env` stand in for Entra ID, and public endpoints
+stand in for private endpoints, for the local demo only.
+
 ## Control posture
 
 | Control area | Local MVP: planned to demonstrate | Cloud target: design-only |
 |---|---|---|
-| Source access | Host allowlist, URL validation, no authentication, redirect checks, bounded requests and downloads | Worker egress through approved NAT Gateway or firewall; host allowlist and stable egress |
+| Source access | Host allowlist, versioned source map, `robots.txt`, URL validation, no authentication, no redirects, bounded requests and downloads, durable fetch state | Scheduled Container Apps job; worker egress through approved NAT Gateway or firewall; host allowlist and stable egress |
 | Protected resources | Skip 401/403, login redirects, and login-content responses; record minimal reason | Same application behavior plus private network controls where applicable |
 | Retrieval and citations | Server-side evidence IDs and source URLs; reject citations not bound to retrieval | APIM and service identity controls do not replace application citation validation |
 | Prompt injection | Treat retrieved text as data; restrict tools; validate tool inputs and model output | Same application controls with policy and monitoring integration |

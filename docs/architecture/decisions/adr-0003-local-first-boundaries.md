@@ -2,7 +2,7 @@
 title: ADR-0003 Local-First Hosting Boundaries
 description: Proposed local MVP boundary and conceptual Azure deployment posture
 author: Product Support Agent Team
-ms.date: 2026-11-21
+ms.date: 2026-11-22
 ms.topic: decision
 keywords:
   - ADR
@@ -23,7 +23,11 @@ deployment. A separately gated network slice is planned for Phase 7.
 ## Proposed decision
 
 * Keep the MVP local-first and organize the Next.js frontend, FastAPI/agent,
-  catalog, and worker as distinct logical components.
+  catalog, and workers as distinct logical components.
+* Run documentation ingestion as a scheduled, single-instance job
+  (`scripts/run_source_ingestion.py`), not as a long-running service. A MongoDB
+  lease prevents overlapping runs. The cloud counterpart is a Container Apps job
+  ([ADR-0006](adr-0006-periodic-resumable-source-ingestion.md)).
 * Use Podman for local orchestration, Azurite for local queue emulation, and
   MongoDB for local metadata and canonical records.
 * Keep user-provided Azure AI Search and Foundry services external to the local
@@ -44,5 +48,6 @@ deployment. A separately gated network slice is planned for Phase 7.
 
 Local demo operation depends on the developer's network, user-supplied
 credentials, service availability, quota, and Azure AI Search access policy.
-The exact local process/container split and cloud topology remain subject to
-Phase 0 and Phase 7 review.
+Today MongoDB and Azurite run in Podman, while the API, Next.js, and ingestion
+job run as host processes bound to loopback. They are containerized in
+Phase 6. The cloud topology remains subject to Phase 7 review.
