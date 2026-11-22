@@ -11174,7 +11174,7 @@
         {
           "kind": "toolInvocationSerialized",
           "invocationMessage": {
-            "value": "Running `gh api repos/ubk1004/product-support-agent --jq '.owner.login'`",
+            "value": "Running `gh api repos/devuser/product-support-agent --jq '.owner.login'`",
             "isTrusted": false,
             "supportThemeIcons": false,
             "supportHtml": false,
@@ -11191,7 +11191,7 @@
           "toolSpecificData": {
             "kind": "terminal",
             "commandLine": {
-              "original": "gh api repos/ubk1004/product-support-agent --jq '.owner.login'"
+              "original": "gh api repos/devuser/product-support-agent --jq '.owner.login'"
             },
             "editable": false,
             "intention": "Verify the configured repository code owner",
@@ -11511,7 +11511,7 @@
         {
           "kind": "toolInvocationSerialized",
           "invocationMessage": {
-            "value": "Running `gh api users/ubk1004 --jq .login; python -c \"import tomllib; from pathlib imp...`",
+            "value": "Running `gh api users/devuser --jq .login; python -c \"import tomllib; from pathlib imp...`",
             "isTrusted": false,
             "supportThemeIcons": false,
             "supportHtml": false,
@@ -11528,7 +11528,7 @@
           "toolSpecificData": {
             "kind": "terminal",
             "commandLine": {
-              "original": "gh api users/ubk1004 --jq .login; python -c \"import tomllib; from pathlib import Path; tomllib.loads(Path('pyproject.toml').read_text()); print('pyproject.toml parses')\"; python -m compileall -q src tests"
+              "original": "gh api users/devuser --jq .login; python -c \"import tomllib; from pathlib import Path; tomllib.loads(Path('pyproject.toml').read_text()); print('pyproject.toml parses')\"; python -m compileall -q src tests"
             },
             "editable": false,
             "intention": "Verify Python metadata and repository account identity",
@@ -11543,7 +11543,7 @@
             },
             "isPty": false,
             "terminalCommandOutput": {
-              "text": "ubk1004\r\npyproject.toml parses\r\n"
+              "text": "devuser\r\npyproject.toml parses\r\n"
             },
             "terminalCommandState": {
               "exitCode": 0
@@ -15540,7 +15540,7 @@
             },
             "isPty": false,
             "terminalCommandOutput": {
-              "text": "compose.yaml: YAML parses\r\n.github/workflows/validate.yml: YAML parses\r\n M Instructions.md\r\n M README.md\r\n M docs/implementation-plan.md\r\n?? .env.example\r\n?? .github/CODEOWNERS\r\n?? .github/workflows/\r\n?? .gitignore\r\n?? apps/\r\n?? compose.yaml\r\n?? docs/architecture/\r\n?? docs/operations/\r\n?? docs/security/\r\n?? pyproject.toml\r\n?? src/\r\n?? tests/\r\n?? uv.lock\r\nuv.lock present\r\norigin\tgit@github.com:ubk1004/product-support-agent.git (fetch)\r\norigin\tgit@github.com:ubk1004/product-support-agent.git (push)\r\n"
+              "text": "compose.yaml: YAML parses\r\n.github/workflows/validate.yml: YAML parses\r\n M Instructions.md\r\n M README.md\r\n M docs/implementation-plan.md\r\n?? .env.example\r\n?? .github/CODEOWNERS\r\n?? .github/workflows/\r\n?? .gitignore\r\n?? apps/\r\n?? compose.yaml\r\n?? docs/architecture/\r\n?? docs/operations/\r\n?? docs/security/\r\n?? pyproject.toml\r\n?? src/\r\n?? tests/\r\n?? uv.lock\r\nuv.lock present\r\norigin\tgit@github.com:devuser/product-support-agent.git (fetch)\r\norigin\tgit@github.com:devuser/product-support-agent.git (push)\r\n"
             },
             "terminalCommandState": {
               "exitCode": 0
@@ -17148,7 +17148,7 @@
           "toolSpecificData": {
             "kind": "terminal",
             "commandLine": {
-              "original": "podman info --format '{{.Host.RemoteSocket.Path}}'; podman compose version; podman ps -a --format '{{.ID}} {{.Names}} {{.Status}}'; gh issue list --repo ubk1004/product-support-agent --state open --limit 10 --json number,title; gh label list --repo ubk1004/product-support-agent --limit 30"
+              "original": "podman info --format '{{.Host.RemoteSocket.Path}}'; podman compose version; podman ps -a --format '{{.ID}} {{.Names}} {{.Status}}'; gh issue list --repo devuser/product-support-agent --state open --limit 10 --json number,title; gh label list --repo devuser/product-support-agent --limit 30"
             },
             "editable": false,
             "intention": "Inspect Compose provider, containers, and GitHub backlog",
@@ -17163,7 +17163,7 @@
             },
             "isPty": false,
             "terminalCommandOutput": {
-              "text": "unix:///run/user/1000/podman/podman.sock\r\n>>>> Executing external compose provider \"C:\\\\Users\\\\devuser\\\\AppData\\\\Local\\\\Microsoft\\\\WindowsApps\\\\docker-compose.exe\". Please see podman-compose(1) for how to disable this message. <<<<\r\n\r\nDocker Compose version v2.34.0\r\n8a561ddf9d38 aspire-dashboard Exited (0) 7 months ago\r\nf074891c77f7 phoenix-postgres Exited (0) 7 months ago\r\n10dd89e62db9 arize-phoenix Exited (0) 7 months ago\r\n65dcdcf545b6 agent-framework-api Exited (0) 7 months ago\r\nb94ac6bfaf76 supabase_analytics_custom-split Exited (0) 6 months ago\r\n761757a7a3c9 supabase_vector_custom-split Exited (0) 5 months ago\r\n3fde3a518717 supabase_kong_custom-split Exited (0) 292 years ago\r\nfda94f7e3d8f supabase_auth_custom-split Exited (0) 5 months ago\r\nb632d37b9a9a supabase_inbucket_custom-split Exited (0) 292 years ago\r\n4325ae0dbe8c supabase_realtime_custom-split Exited (0) 6 months ago\r\n65e6423bffed supabase_rest_custom-split Exited (0) 292 years ago\r\n9f8e1402a056 supabase_storage_custom-split Exited (0) 6 months ago\r\nba7769206711 supabase_edge_runtime_custom-split Exited (0) 292 years ago\r\n98fb59153c43 supabase_pg_meta_custom-split Exited (0) 292 years ago\r\n9183534fc12a supabase_studio_custom-split Exited (0) 292 years ago\r\n33f153e8516c supabase_db_custom-split Exited (0) 292 years ago\r\n17f0d64d5173 smart-split-app Exited (0) 292 years ago\r\n487eac04b437 smart-split-zap-app Exited (0) 292 years ago\r\n1512a986f67b mobile-bff-vwpqpcbz Exited (0) 292 years ago\r\n3fbaba46056f redis-zksrtsen Exited (0) 292 years ago\r\n27c20709df4b mobile-bff-sehxqjvp Created\r\nb5afc236a013 redis-dveqxeer Created\r\nd89ea94a46b8 redis-qgxfqssd Exited (0) 292 years ago\r\n94cdde5b2c3e mobile-bff-hnsjegvm Exited (0) 292 years ago\r\ncb00f31ae14f mobile-bff-tqtpysyt Created\r\ndcc119a5d750 redis-esdpwdzb Created\r\nf506d30dbfc3 mobile-bff-scnwqzjv Exited (0) 292 years ago\r\n7f8cdbc444df redis-kygpjwbs Exited (0) 292 years ago\r\n7e2b9d5339f8 postgres-9a8c2604 Exited (0) 292 years ago\r\nc76ac45f297d eventbus-9a8c2604 Exited (0) 292 years ago\r\ne2dbb4e0a7c0 redis-vpjgkewx Exited (0) 292 years ago\r\n747617c77f25 mobile-bff-ffvvzpeh Exited (0) 292 years ago\r\n7826f0fb51d1 demystifier-postgres Exited (0) 292 years ago\r\n21f48be7d639 demystifier-phoenix Exited (0) 292 years ago\r\n3191adaf969b demystifier-frontend Exited (0) 292 years ago\r\n3f50f91585c8 demystifier-backend Exited (0) 292 years ago\r\ne2540fc9285c oi-azurite Exited (0) 292 years ago\r\n8199ec7ee494 oi-sql Exited (0) 292 years ago\r\n4ffd04a8824d oi-aspire-dashboard Exited (0) 292 years ago\r\n465bfa7eab35 oi-wiremock Exited (0) 292 years ago\r\n81ecdcddd5f6 oi-sql-init Exited (0) 3 months ago\r\n6fdc9a6d31e9 paradedb Exited (0) 292 years ago\r\n3b24c34f9225 opsflow-sql Up 13 hours (healthy)\r\n0035b0133275 opsflow-keycloak Up 13 hours\r\nbb0355d95e1a opsflow-api Up 13 hours\r\nGraphQL: Could not resolve to a Repository with the name 'ubk1004/product-support-agent'. (repository)\r\nGraphQL: Could not resolve to a Repository with the name 'ubk1004/product-support-agent'. (repository)\r\n"
+              "text": "unix:///run/user/1000/podman/podman.sock\r\n>>>> Executing external compose provider \"C:\\\\Users\\\\devuser\\\\AppData\\\\Local\\\\Microsoft\\\\WindowsApps\\\\docker-compose.exe\". Please see podman-compose(1) for how to disable this message. <<<<\r\n\r\nDocker Compose version v2.34.0\r\n8a561ddf9d38 aspire-dashboard Exited (0) 7 months ago\r\nf074891c77f7 phoenix-postgres Exited (0) 7 months ago\r\n10dd89e62db9 arize-phoenix Exited (0) 7 months ago\r\n65dcdcf545b6 agent-framework-api Exited (0) 7 months ago\r\nb94ac6bfaf76 supabase_analytics_custom-split Exited (0) 6 months ago\r\n761757a7a3c9 supabase_vector_custom-split Exited (0) 5 months ago\r\n3fde3a518717 supabase_kong_custom-split Exited (0) 292 years ago\r\nfda94f7e3d8f supabase_auth_custom-split Exited (0) 5 months ago\r\nb632d37b9a9a supabase_inbucket_custom-split Exited (0) 292 years ago\r\n4325ae0dbe8c supabase_realtime_custom-split Exited (0) 6 months ago\r\n65e6423bffed supabase_rest_custom-split Exited (0) 292 years ago\r\n9f8e1402a056 supabase_storage_custom-split Exited (0) 6 months ago\r\nba7769206711 supabase_edge_runtime_custom-split Exited (0) 292 years ago\r\n98fb59153c43 supabase_pg_meta_custom-split Exited (0) 292 years ago\r\n9183534fc12a supabase_studio_custom-split Exited (0) 292 years ago\r\n33f153e8516c supabase_db_custom-split Exited (0) 292 years ago\r\n17f0d64d5173 smart-split-app Exited (0) 292 years ago\r\n487eac04b437 smart-split-zap-app Exited (0) 292 years ago\r\n1512a986f67b mobile-bff-vwpqpcbz Exited (0) 292 years ago\r\n3fbaba46056f redis-zksrtsen Exited (0) 292 years ago\r\n27c20709df4b mobile-bff-sehxqjvp Created\r\nb5afc236a013 redis-dveqxeer Created\r\nd89ea94a46b8 redis-qgxfqssd Exited (0) 292 years ago\r\n94cdde5b2c3e mobile-bff-hnsjegvm Exited (0) 292 years ago\r\ncb00f31ae14f mobile-bff-tqtpysyt Created\r\ndcc119a5d750 redis-esdpwdzb Created\r\nf506d30dbfc3 mobile-bff-scnwqzjv Exited (0) 292 years ago\r\n7f8cdbc444df redis-kygpjwbs Exited (0) 292 years ago\r\n7e2b9d5339f8 postgres-9a8c2604 Exited (0) 292 years ago\r\nc76ac45f297d eventbus-9a8c2604 Exited (0) 292 years ago\r\ne2dbb4e0a7c0 redis-vpjgkewx Exited (0) 292 years ago\r\n747617c77f25 mobile-bff-ffvvzpeh Exited (0) 292 years ago\r\n7826f0fb51d1 demystifier-postgres Exited (0) 292 years ago\r\n21f48be7d639 demystifier-phoenix Exited (0) 292 years ago\r\n3191adaf969b demystifier-frontend Exited (0) 292 years ago\r\n3f50f91585c8 demystifier-backend Exited (0) 292 years ago\r\ne2540fc9285c oi-azurite Exited (0) 292 years ago\r\n8199ec7ee494 oi-sql Exited (0) 292 years ago\r\n4ffd04a8824d oi-aspire-dashboard Exited (0) 292 years ago\r\n465bfa7eab35 oi-wiremock Exited (0) 292 years ago\r\n81ecdcddd5f6 oi-sql-init Exited (0) 3 months ago\r\n6fdc9a6d31e9 paradedb Exited (0) 292 years ago\r\n3b24c34f9225 opsflow-sql Up 13 hours (healthy)\r\n0035b0133275 opsflow-keycloak Up 13 hours\r\nbb0355d95e1a opsflow-api Up 13 hours\r\nGraphQL: Could not resolve to a Repository with the name 'devuser/product-support-agent'. (repository)\r\nGraphQL: Could not resolve to a Repository with the name 'devuser/product-support-agent'. (repository)\r\n"
             },
             "terminalCommandState": {
               "exitCode": 1
@@ -17270,7 +17270,7 @@
             },
             "isPty": false,
             "terminalCommandOutput": {
-              "text": "origin\tgit@github.com:ubk1004/product-support-agent.git (fetch)\r\norigin\tgit@github.com:ubk1004/product-support-agent.git (push)\r\ndevuser\r\nGraphQL: Could not resolve to a Repository with the name 'ubk1004/product-support-agent'. (repository)\r\n"
+              "text": "origin\tgit@github.com:devuser/product-support-agent.git (fetch)\r\norigin\tgit@github.com:devuser/product-support-agent.git (push)\r\ndevuser\r\nGraphQL: Could not resolve to a Repository with the name 'devuser/product-support-agent'. (repository)\r\n"
             },
             "terminalCommandState": {
               "exitCode": 1
