@@ -48,7 +48,7 @@ These are cheap, protect real systems, and stay in force in demo mode:
    [source map](../../operations/phase-3-source-map-v1.json), through the
    source worker, which enforces `robots.txt`, request budgets, and backoff.
 4. Keep citations bound to retrieved evidence. The model never authors URLs.
-5. Keep query/response retention off (`QUERY_RESPONSE_RETENTION_ENABLED=false`).
+5. Keep query/response retention off.
 6. Bind local services to loopback. Do not expose the demo publicly.
 7. Keep routine tests offline (fakes and mocks). Live tests are opt-in with
    `-m live`.

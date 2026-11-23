@@ -22,6 +22,31 @@ FastAPI over the Compose network. No query or response history is stored.
 * Valid deployment and Search credentials in a local `.env` file.
 * `uv` 0.13.9 or later for running the evaluation and Python checks.
 
+### Azure resources to prepare
+
+The local demo requires access to two Azure services:
+
+* Microsoft Foundry with a chat deployment (`gpt-5`) and an embedding
+  deployment (`text-embedding-3-small`). Record the OpenAI-compatible endpoint,
+  API key, and exact deployment names.
+* Azure AI Search with a service endpoint and admin key for server-side index
+  creation, indexing, and retrieval. The indexing script creates the versioned
+  `product-support-demo-*` index; live tests use a separate
+  `product-support-test-*` index.
+
+Vector search is supported across current Search tiers, but quotas, capacity,
+pricing, and other features differ. Check the current service limits and costs.
+This project did not verify semantic ranking availability. MongoDB and Azurite
+run locally in Compose. The API currently uses an in-memory queue, so Azurite
+is not connected to the active catalog workflow. No Azure Storage account,
+database, network, or application-hosting resources are required. See the
+[README Azure setup overview](../../README.md#azure-resources-for-a-local-only-demo)
+and the linked Microsoft setup guides there.
+
+Creating Azure resources, changing service tiers, or deploying new models may
+incur spend and requires the authorization described in
+[ADR-0007](../architecture/decisions/adr-0007-demo-delivery-mode.md).
+
 From a clean checkout, copy `.env.example` once, then fill in the existing
 deployment and Search values locally. Do not overwrite an existing `.env`:
 
@@ -43,9 +68,9 @@ Required settings in `.env` are:
   `mongodb://127.0.0.1:27017` in the host `.env`; Compose overrides it inside
   the API container with `mongodb://mongodb:27017`.
 
-Leave `CHAT_TEMPERATURE` empty. The gpt-5 chat deployment rejects a temperature
-parameter, so the chat client omits it. Query/response retention must remain
-disabled.
+Chat requests do not include a temperature parameter because the gpt-5
+deployment rejects it. Query/response retention is not implemented and
+remains off.
 
 Compose passes `.env` only to the API service using `env_file`; secrets are not
 baked into either image. The web service receives only
@@ -63,8 +88,9 @@ podman machine start
 ```
 
 From the repository root, one command builds and starts MongoDB, Azurite, the
-API, and the web app. Health checks gate startup order, and published ports bind
-only to loopback:
+API, and the web app. The API uses an in-memory queue; Azurite is not connected
+to the current workflow. Health checks gate startup order, and published ports
+bind only to loopback:
 
 ```powershell
 podman compose up --build -d

@@ -65,7 +65,7 @@ stand in for private endpoints, for the local demo only.
 | Secrets | Local environment/configuration outside source control; no credentials in fixtures, logs, or traces | Key Vault and managed identity where supported; GitHub Actions OIDC |
 | Network isolation | Segmented Podman networks if validated; local demo bound to local access | VNet, subnets, NSGs, private endpoints/DNS, controlled egress, APIM |
 | Search/data access | User-provided Azure AI Search; least-privilege Entra ID where supported; no shared production data | Private endpoint, RBAC, network restrictions, environment separation |
-| Telemetry | OpenTelemetry-compatible, minimized metadata; `QUERY_RESPONSE_RETENTION_ENABLED` defaults off, with per-session opt-out and no content retention before privacy approval | Azure Monitor and Log Analytics with approved retention and access controls |
+| Telemetry | OpenTelemetry-compatible, minimized metadata; query/response content is not retained | Azure Monitor and Log Analytics with approved retention and access controls |
 | Supply chain | Dependency lock and scans, secret scanning, container scanning in CI | Pinned GitHub Actions, protected deployment environment, artifact provenance |
 | User access | Local-only demo with no end-user authentication; no public exposure | User authentication and authorization remain a Phase 7 design decision |
 | Cloud deployment | No application stack deployment | IaC static validation only; application deployment is deferred |
