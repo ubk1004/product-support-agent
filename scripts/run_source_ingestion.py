@@ -2,6 +2,10 @@
 
 Intended to be scheduled (for example weekly). Durable fetch state in MongoDB lets a rerun or a
 restart after a crash skip URLs fetched successfully within the freshness window.
+
+By default each stored or removed page is also embedded and written to, or deleted from, the
+versioned Azure AI Search index, so search stays consistent with MongoDB. Pass `--repository-only`
+to store pages without calling the embedding or Search services.
 """
 
 from __future__ import annotations
@@ -15,12 +19,31 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
-from product_support_agent.config import Settings
-from product_support_agent.document_store import MongoCanonicalDocumentRepository
+from azure.core.credentials import AzureKeyCredential
+from azure.search.documents.aio import SearchClient
+from azure.search.documents.indexes.aio import SearchIndexClient
+
+from product_support_agent.config import ModelAndSearchSettings, Settings
+from product_support_agent.document_store import (
+    CanonicalDocumentRepository,
+    MongoCanonicalDocumentRepository,
+)
+from product_support_agent.documents import HTML_PARSER_VERSION
+from product_support_agent.embeddings import OpenAICompatibleEmbedder
 from product_support_agent.fetch_state import FreshnessPolicy, MongoFetchStateStore
 from product_support_agent.http_fetch import BoundedFetcher
-from product_support_agent.indexing import RepositoryOnlyIndexer
-from product_support_agent.source_ingestion import SourceIngestionLimits, SourceIngestionWorker
+from product_support_agent.indexing import DocumentIndexingService, RepositoryOnlyIndexer
+from product_support_agent.search import (
+    AzureAISearchProvider,
+    apply_search_index,
+    build_search_index,
+    build_versioned_index_name,
+)
+from product_support_agent.source_ingestion import (
+    SourceDocumentIndexer,
+    SourceIngestionLimits,
+    SourceIngestionWorker,
+)
 from product_support_agent.sources import load_source_map
 
 LEASE_NAME = "source-ingestion"
@@ -39,8 +62,49 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="ignore freshness and failure backoff for this run",
     )
+    parser.add_argument(
+        "--repository-only",
+        action="store_true",
+        help="store pages in MongoDB only; skip embeddings and Azure AI Search",
+    )
     parser.add_argument("--report", type=Path, default=None, help="write the JSON run report")
     return parser.parse_args(argv)
+
+
+async def build_search_indexer(
+    repository: CanonicalDocumentRepository,
+) -> tuple[SourceDocumentIndexer, AzureAISearchProvider]:
+    """Create the versioned index if needed and return an indexer that keeps Search in sync."""
+    settings = ModelAndSearchSettings()  # type: ignore[call-arg]
+    index_name = build_versioned_index_name(
+        settings.demo_index_base,
+        embedding_model_version=settings.embedding_model_version,
+        embedding_dimensions=settings.embedding_dimensions,
+        parser_version=HTML_PARSER_VERSION,
+    )
+    credential = AzureKeyCredential(settings.search_key.get_secret_value())
+    index_client = SearchIndexClient(settings.search_endpoint, credential)
+    try:
+        await apply_search_index(
+            index_client,
+            build_search_index(index_name, embedding_dimensions=settings.embedding_dimensions),
+        )
+    finally:
+        await index_client.close()
+    provider = AzureAISearchProvider(
+        SearchClient(settings.search_endpoint, index_name, credential),
+        embedding_dimensions=settings.embedding_dimensions,
+        embedding_model_version=settings.embedding_model_version,
+    )
+    embedder = OpenAICompatibleEmbedder(
+        base_url=settings.embedding_base_url,
+        api_key=settings.embedding_api_key.get_secret_value(),
+        deployment=settings.embedding_deployment,
+        model_version=settings.embedding_model_version,
+        dimensions=settings.embedding_dimensions,
+    )
+    indexer = DocumentIndexingService(repository=repository, search=provider, embedder=embedder)
+    return indexer, provider
 
 
 async def _run(args: argparse.Namespace, settings: Settings) -> int:
@@ -54,7 +118,12 @@ async def _run(args: argparse.Namespace, settings: Settings) -> int:
     holder = f"{socket.gethostname()}:{uuid4()}"
     now = datetime.now(UTC)
     lease_ttl = timedelta(hours=6)
+    provider: AzureAISearchProvider | None = None
     try:
+        if args.repository_only or args.discover_only:
+            indexer: SourceDocumentIndexer = RepositoryOnlyIndexer(repository=repository)
+        else:
+            indexer, provider = await build_search_indexer(repository)
         state.ensure_indexes()
         repository.ensure_indexes()
         if not state.acquire_lease(LEASE_NAME, holder, now=now, ttl=lease_ttl):
@@ -67,7 +136,7 @@ async def _run(args: argparse.Namespace, settings: Settings) -> int:
                 user_agent=settings.source_user_agent,
                 max_retry_after_seconds=settings.source_max_retry_after_seconds,
             ),
-            indexer=RepositoryOnlyIndexer(repository=repository),
+            indexer=indexer,
             repository=repository,
             policy=FreshnessPolicy(
                 success_freshness=timedelta(hours=settings.source_success_freshness_hours),
@@ -93,6 +162,8 @@ async def _run(args: argparse.Namespace, settings: Settings) -> int:
         state.release_lease(LEASE_NAME, holder)
         state.close()
         repository.close()
+        if provider is not None:
+            await provider.close()
 
     payload = report.model_dump(mode="json")
     if args.report is not None:

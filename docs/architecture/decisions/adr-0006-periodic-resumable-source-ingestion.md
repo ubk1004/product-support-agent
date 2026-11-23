@@ -13,10 +13,16 @@ keywords:
 
 ## Status
 
-Proposed on 2026-11-22. The code and the
+Accepted for the demo on 2026-11-22 and amended on 2026-11-23. The code and the
 [source map](../../operations/phase-3-source-map-v1.json) are implemented and
-tested offline. No live ingestion run has been authorized. Source terms remain
-unverified.
+tested offline. A live run stored 300 pages for 10 products with 0 failures.
+Source terms remain unverified (production-only, see
+[ADR-0007](adr-0007-demo-delivery-mode.md)).
+
+Amendment, 2026-11-23: the runner now embeds and indexes each page into Azure AI
+Search during the run, and deletes removed pages from Search as well as MongoDB.
+The earlier "embeddings are deferred" behavior is available as
+`--repository-only`.
 
 ## Context
 
@@ -83,10 +89,13 @@ successful URLs to be fetched again within a day.
   overlapping scheduled runs exit instead of doubling the request load.
 * **Selection changes are reconciled.** After a complete product pass, pages
   that dropped out of the selection have their canonical documents deleted.
-* **Embeddings are deferred.** Until an embedding deployment is approved, the
-  runner stores canonical documents and chunks only, using
-  `RepositoryOnlyIndexer`. `DocumentIndexingService.reconcile_all` embeds and
-  indexes them later.
+* **Search stays in step with MongoDB.** By default the runner uses
+  `DocumentIndexingService`: it writes chunks and vectors to the versioned
+  Search index before it commits the canonical document, and it deletes both
+  when a page leaves the selection. `--repository-only` (and `--discover-only`)
+  use `RepositoryOnlyIndexer` and skip embeddings and Search.
+  `scripts/index_documents.py` remains available to rebuild the index from
+  MongoDB, for example after an embedding model change.
 * **Coverage is derived from fetch state.** `GET /catalog/coverage` combines the
   manifest, the source map, and fetch state into a per-product status. The UI
   lists indexed products first and labels every other product as not covered.

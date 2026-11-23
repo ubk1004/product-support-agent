@@ -1,11 +1,26 @@
 import { apiBaseUrl } from "@/lib/coverage";
 
-const MAX_BODY_CHARS = 12_000;
+const MAX_BODY_CHARS = 48_000;
 const MAX_MESSAGE_CHARS = 2_000;
+const MAX_HISTORY_TURNS = 8;
+const MAX_HISTORY_TURN_CHARS = 4_000;
+
+type ChatTurn = {
+  role: "user" | "assistant";
+  content: string;
+};
 
 type ChatRequest = {
   message: string;
   product_id?: string;
+  history?: ChatTurn[];
+};
+
+type Citation = {
+  evidence_id: string;
+  title: string;
+  source_url: string;
+  product_name?: string | null;
 };
 
 type ChatError =
@@ -18,10 +33,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function isChatTurn(value: unknown): value is ChatTurn {
+  return (
+    isRecord(value) &&
+    Object.keys(value).every((key) => key === "role" || key === "content") &&
+    (value.role === "user" || value.role === "assistant") &&
+    typeof value.content === "string" &&
+    value.content.trim().length > 0 &&
+    value.content.length <= MAX_HISTORY_TURN_CHARS
+  );
+}
+
 function isChatRequest(value: unknown): value is ChatRequest {
   if (
     !isRecord(value) ||
-    Object.keys(value).some((key) => !["message", "product_id"].includes(key))
+    Object.keys(value).some(
+      (key) => !["message", "product_id", "history"].includes(key),
+    )
   ) {
     return false;
   }
@@ -29,6 +57,14 @@ function isChatRequest(value: unknown): value is ChatRequest {
     typeof value.message !== "string" ||
     value.message.trim().length === 0 ||
     value.message.length > MAX_MESSAGE_CHARS
+  ) {
+    return false;
+  }
+  if (
+    value.history !== undefined &&
+    (!Array.isArray(value.history) ||
+      value.history.length > MAX_HISTORY_TURNS ||
+      !value.history.every(isChatTurn))
   ) {
     return false;
   }
@@ -40,15 +76,18 @@ function isChatRequest(value: unknown): value is ChatRequest {
   );
 }
 
-function isCitation(
-  value: unknown,
-): value is { evidence_id: string; title: string; source_url: string } {
+function isCitation(value: unknown): value is Citation {
   if (
     !isRecord(value) ||
     typeof value.evidence_id !== "string" ||
     !/^E\d+$/.test(value.evidence_id) ||
     typeof value.title !== "string" ||
-    typeof value.source_url !== "string"
+    typeof value.source_url !== "string" ||
+    !(
+      value.product_name === undefined ||
+      value.product_name === null ||
+      typeof value.product_name === "string"
+    )
   ) {
     return false;
   }
@@ -62,7 +101,7 @@ function isCitation(
 
 function isChatResponse(value: unknown): value is {
   answer: string;
-  citations: { evidence_id: string; title: string; source_url: string }[];
+  citations: Citation[];
   grounded: boolean;
   request_id: string;
 } {
@@ -111,6 +150,7 @@ export async function POST(request: Request): Promise<Response> {
   const payload = {
     message: body.message.trim(),
     ...(body.product_id ? { product_ids: [body.product_id.trim()] } : {}),
+    ...(body.history?.length ? { history: body.history } : {}),
   };
 
   let upstream: Response;

@@ -8,7 +8,7 @@ from typing import Any
 from urllib.parse import urljoin, urlparse
 
 import httpx
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl
 
 ALLOWED_SOURCE_HOST = "my.opentext.com"
 ALLOWED_SOURCE_HOSTS = frozenset(
@@ -48,6 +48,12 @@ class CatalogOutcome(BaseModel):
     products: list[ProductReference]
     page_count: int
     reason: str | None = None
+    # What the sources tried before this one returned, for example "search: protected".
+    notes: list[str] = Field(default_factory=list)
+
+
+def _outcome_note(outcome: CatalogOutcome) -> str:
+    return f"{outcome.source}: {outcome.reason or 'ok'}"
 
 
 class AnchorParser(HTMLParser):
@@ -188,29 +194,31 @@ class CatalogClient:
         self.max_response_bytes = max_response_bytes
 
     async def discover(self) -> CatalogOutcome:
+        """Find the catalog from the listing, then the search API, then the product feed.
+
+        A source that is protected (HTTP 401/403, a login redirect, or login content) is
+        skipped, never retried with credentials, and recorded in `notes`. The feed is used
+        whenever the earlier sources cannot yield a catalog.
+        """
         listing = await self._get_listing()
         if listing.products:
             return listing
 
         search = await self._get_search()
+        notes = [_outcome_note(listing)]
         if search.products:
-            return search
-        if search.reason and search.reason.startswith("protected"):
-            return CatalogOutcome(
-                source="feed",
-                products=[],
-                page_count=0,
-                reason="search protected; fallback feed not used",
-            )
+            return search.model_copy(update={"notes": notes})
 
         feed = await self._get_feed()
+        notes.append(_outcome_note(search))
         if feed.products:
-            return feed
+            return feed.model_copy(update={"notes": notes})
         return CatalogOutcome(
             source="feed",
             products=[],
             page_count=feed.page_count,
             reason=feed.reason or "catalog empty",
+            notes=notes,
         )
 
     async def _get_listing(self) -> CatalogOutcome:

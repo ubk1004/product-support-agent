@@ -43,6 +43,15 @@ param foundryChatDeployment string = 'chat-deployment-placeholder'
 @maxLength(64)
 param foundryEmbeddingDeployment string = 'embedding-deployment-placeholder'
 
+@description('Embedding model version used to name the Azure AI Search index.')
+@minLength(1)
+@maxLength(64)
+param embeddingModelVersion string = 'text-embedding-3-small'
+
+@description('Embedding vector dimensions for the deployment and the Search index.')
+@minValue(1)
+param embeddingDimensions int = 1536
+
 @description('Container image reference for the API.')
 @minLength(1)
 @maxLength(512)
@@ -156,6 +165,8 @@ module containerApps 'modules/container-apps.bicep' = {
     foundryEndpoint: foundryEndpoint
     foundryChatDeployment: foundryChatDeployment
     foundryEmbeddingDeployment: foundryEmbeddingDeployment
+    embeddingModelVersion: embeddingModelVersion
+    embeddingDimensions: embeddingDimensions
     apiImage: apiImage
     webImage: webImage
   }

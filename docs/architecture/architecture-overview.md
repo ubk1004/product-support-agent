@@ -18,16 +18,18 @@ Each diagram marks components as **implemented** (code and tests exist) or
 **planned** (later phase). Implemented components are tested offline unless the
 [implementation plan](../implementation-plan.md) records a live verification.
 
-| Area | State on 2026-11-22 |
+| Area | State on 2026-11-23 |
 |---|---|
-| Catalog discovery, manifest, queue contract, Phase 2 worker | Implemented (Phase 2, approved) |
+| Catalog discovery and manifest | Implemented. The listing, search API, then product feed are tried in order; a protected source is skipped and noted, and `scripts/create_manifest.py` writes the manifest |
+| Ingestion queue and Phase 2 queue worker | Implemented and tested offline, but **not used** by the demo. The source worker runs from `scripts/run_source_ingestion.py` on the source map; the in-memory queue and Azurite stay unused (see the README) |
 | Source map, periodic source worker, fetch state, coverage API and UI | Implemented, tested offline ([ADR-0006](decisions/adr-0006-periodic-resumable-source-ingestion.md)) |
 | Canonical documents and chunks in MongoDB | Implemented; 300 pages ingested for 10 products |
-| Azure AI Search index, hybrid retrieval provider | Implemented; 952 chunks indexed in the demo index |
+| Azure AI Search index, hybrid retrieval provider | Implemented. Ingestion embeds and indexes each stored page and deletes removed pages from Search in the same run (`--repository-only` skips Search). 952 chunks were indexed before this change |
 | Embeddings and chat | Implemented through the user's Foundry OpenAI-compatible endpoint |
-| Agent, chat API, citations, chat UI | Implemented (Phases 4 and 5); citations resolve from retrieved evidence |
-| Metadata-only logs and evaluation | Implemented (Phase 6); query/response retention remains off |
-| Azure deployment | Design-only (Phase 7) |
+| Agent, chat API, citations, chat UI | Implemented (Phases 4 and 5), with a product catalog tool, short conversation context, and numbered citations; citations resolve from retrieved evidence |
+| Metadata-only logs and evaluation | Implemented (Phase 6); evaluation v2 adds a claim-support check and adversarial cases; query/response retention remains off |
+| Azure deployment | Bicep and workflows authored and statically validated; **nothing deployed**. API Management is not yet in external VNet mode (see the [infrastructure notes](../../infra/README.md)) |
+| OpenText Service Management expansion | Design only: [service-management-expansion.md](service-management-expansion.md) |
 
 Legend: solid lines and boxes are implemented; dashed lines or boxes marked
 *planned* are not built yet.
@@ -81,7 +83,7 @@ flowchart TB
             ManifestAPI["GET /catalog/manifest"]
             CoverageAPI["GET /catalog/coverage"]
             RunsAPI["GET /ingestion/runs/run_id"]
-            Agent["Agent and retrieval tool"]
+            Agent["Agent with search_documentation<br/>and list_products tools"]
         end
 
         subgraph Jobs["Ingestion"]
@@ -91,7 +93,7 @@ flowchart TB
             Runner["scripts/run_source_ingestion.py"]
         end
 
-        Azurite[(Azurite queue<br/>product-ingestion and poison)]
+        Azurite[("Azurite queue<br/>planned: not used by the demo")]
         Mongo[(MongoDB)]
         FoundryClient["OpenAI-compatible Foundry client"]
     end
@@ -104,8 +106,9 @@ flowchart TB
     CoverageAPI --> Files
     CoverageAPI -->|Read fetch state| Mongo
     CatalogSvc --> Files
-    CatalogSvc --> Azurite
-    Azurite --> Phase2Worker
+    CatalogSvc -.->|planned| Azurite
+    Azurite -.->|planned| Phase2Worker
+    Manifest["scripts/create_manifest.py"] --> CatalogSvc
     Runner --> SourceWorker
     SourceWorker --> Files
     SourceWorker -->|Fetch state, lease, canonical documents| Mongo
@@ -149,7 +152,7 @@ flowchart TD
     Cached --> Select[Rank and cap pages, max 30]
 
     Select --> Page{Next page?}
-    Page -->|None| Reconcile[Delete documents for pages<br/>no longer selected]
+    Page -->|None| Reconcile[Delete pages no longer selected<br/>from Search and MongoDB]
     Reconcile --> Next
     Page -->|Page| Fresh{Success within 24 h?<br/>or revision unchanged?}
     Fresh -->|Yes| Skip[Skip without a request]
@@ -170,7 +173,8 @@ flowchart TD
     Streak -->|No| Page
     Get -->|200, new content| Extract[Extract HTML from JSON or main content]
     Extract --> Normalize[Normalize, chunk, persist with fetched_at]
-    Normalize --> Record[Record indexed state]
+    Normalize --> Embed[Embed chunks and write to Azure AI Search]
+    Embed --> Record[Record indexed state]
     Record --> Page
 ```
 
@@ -193,7 +197,7 @@ sequenceDiagram
     Sched->>Run: Run 1
     Run->>Site: robots.txt, TOC, page 1, page 2
     Run->>State: Indexed: page 1, then page 2
-    Run->>Docs: Upsert page 1 and page 2 documents
+    Run->>Docs: Upsert page 1 and page 2 documents, and index them in Search
     Note over Run: Crash before page 3
 
     Sched->>Run: Run 2, minutes later
@@ -257,22 +261,37 @@ sequenceDiagram
     participant Search as Azure AI Search
     participant Foundry as Foundry OpenAI-compatible endpoint
 
-    User->>UI: Question
-    UI->>API: Validated request, no history stored
-    API->>Agent: Question and covered product IDs
+    User->>UI: Question, optional product filter
+    UI->>API: Validated request with up to 8 earlier turns from this tab
+    API->>Agent: Question, history, catalog of searchable products
     Agent->>Foundry: Tool-calling chat request
-    Foundry-->>Agent: Call retrieval tool
-    Agent->>Search: Hybrid query, product filter
-    Search-->>Agent: Chunks with evidence ID and source URL
+    alt Question about what is covered
+        Foundry-->>Agent: Call list_products
+        Agent-->>Foundry: Catalog entries with evidence IDs for support pages
+    else Question about a product
+        Foundry-->>Agent: Call search_documentation
+        Agent->>Search: Hybrid query, product filter
+        Search-->>Agent: Chunks with evidence ID and source URL
+    end
     Agent->>Foundry: Answer using evidence IDs only
     Foundry-->>Agent: Draft answer
     Agent-->>API: Answer and cited evidence IDs
-    API->>API: Resolve IDs to stored URLs, reject unknown IDs
-    API-->>UI: Answer with evidence-bound citations
+    API->>API: Drop unknown IDs and URLs, number sources by first use
+    API-->>UI: Answer with numbered, evidence-bound citations
 ```
 
-Retrieved text is untrusted data. The model may cite only evidence IDs; the
-server resolves them to canonical URLs.
+Retrieved text and earlier turns are untrusted data. The model may cite only
+evidence IDs; the server resolves them to canonical URLs and renumbers them so
+the markers in the answer match the source list. The conversation lives only in
+the browser tab; the server does not store it.
+
+### What "grounded" means
+
+The API's `grounded` flag means the answer kept at least one citation whose URL
+came from this request's retrieved evidence. It does **not** prove that each
+claim is supported by its source. The [evaluation](../operations/phase-6-evaluation-v2.md)
+adds a model-judged claim-support check against the full indexed text of each
+cited page. That check is a screening measure and needs periodic human review.
 
 ## Data ownership
 
@@ -436,6 +455,7 @@ design-only target, not a deployed network slice.
 
 ## References
 
+* [OpenText Service Management expansion (design only)](service-management-expansion.md)
 * [ADR-0002 Source access and manifest](decisions/adr-0002-source-access-and-manifest.md)
 * [ADR-0006 Periodic, resumable documentation ingestion](decisions/adr-0006-periodic-resumable-source-ingestion.md)
 * [Microsoft Agent Framework overview](https://learn.microsoft.com/agent-framework/overview/)

@@ -19,9 +19,18 @@ The live source outcomes remain inconclusive and are recorded in the
 queue-emulator integration test remains unrun. A later
 [linked-source review](../../operations/phase-3-linked-source-verification-2026-11-22.json)
 observed product-specific public documentation for 10 manifest products;
-none has been indexed. The repeatable fetch paths, source map, and periodic
-ingestion behavior for those products are proposed in
-[ADR-0006](adr-0006-periodic-resumable-source-ingestion.md).
+the repeatable fetch paths, source map, and periodic ingestion behavior for
+those products are in
+[ADR-0006](adr-0006-periodic-resumable-source-ingestion.md), which indexed 300
+pages for them.
+
+Amendment, 2026-11-23: catalog discovery now treats a protected search API
+(HTTP 401 or 403, a login redirect, or login content) as "skip this source" and
+continues to the product feed, as the requirements describe. The skipped source
+is recorded in `CatalogOutcome.notes`. `scripts/create_manifest.py` is the
+runnable path that builds a manifest this way; it never retries with
+credentials. The approved v1 manifest was produced earlier from the feed and
+is reused unchanged.
 
 ## Context
 
