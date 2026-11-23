@@ -13,6 +13,49 @@ keywords:
 
 Scope note: this IaC is validated by build, lint and static review only and has not been deployed. It shows the intended Azure architecture. Production gates (policy scanning, structural checks, cost estimate, APIM SKU choice, branch protection) are recorded in the Phase 7 "Production-only" note and in `docs/operations/production-gap-register.md`. The focus was a working local application first.
 
+## Status: written, validated, deployed
+
+| Item | Written | Validated | Deployed |
+|---|---|---|---|
+| Network, platform, data, identity, Container Apps modules | Yes | `az bicep build`, `build-params`, and `lint` pass (2026-11-23) | **No** |
+| Scheduled ingestion job (Container Apps job) | Yes | Same static checks | **No** |
+| API Management | Optional module, off by default | Same static checks | **No** |
+| `infra`, `app`, and `validate` GitHub workflows | Yes | Linted with actionlint; hosted runs not verified | **No** |
+| What-if against Azure | Attempted, blocked by an expired sign-in (`AADSTS700082`) | **Not run** | n/a |
+
+Nothing here is a claim that the infrastructure works in Azure. Static checks
+catch syntax and lint problems, not permission, quota, networking, or runtime
+errors.
+
+### Known gaps
+
+* **API Management is not in external VNet mode.** Requirement 18 asks for APIM
+  deployed in external mode with VNet integration. The module uses the
+  `Consumption` SKU with `virtualNetworkType: 'None'`, which cannot join a VNet.
+  External mode needs a `Developer`, `Premium`, or `StandardV2` SKU, a dedicated
+  subnet and NSG, and a cost and SKU decision. That is a design decision for
+  the cloud and security owners, so it is recorded here and in the
+  [production gap register](../docs/operations/production-gap-register.md) and
+  not guessed at in code.
+* **Key Vault secret values are not created by this IaC.** The job and apps
+  reference `mongodb-connection-string`, `azure-ai-search-api-key`, and
+  `azure-openai-api-key` by name. Someone with Key Vault access must create
+  them before the first run. The job's identity has the `Key Vault Secrets
+  User` role.
+* **The ingestion job needs the embedding settings.** It now indexes into
+  Search as it runs, so it receives the embedding model version and dimensions
+  (`embeddingModelVersion`, `embeddingDimensions`) and the Foundry and Search
+  settings. These must match the embedding deployment or the index name will
+  not match what the API reads.
+* **Image publishing needs a self-hosted runner.** The private registry is not
+  reachable from a GitHub-hosted runner. The workflow requires a runner labelled
+  `dev-vnet`; it has not been created.
+* **Mongo-compatible store.** The Bicep provisions Azure Cosmos DB for MongoDB.
+  The application has only been exercised against MongoDB 8 locally.
+* **No observability wiring beyond platform defaults.** Application
+  OpenTelemetry export is not implemented; see the
+  [traceability matrix](../docs/architecture/requirements-traceability.md).
+
 ## Azure infrastructure design
 
 The subscription-scope template creates the resource group, then provisions the

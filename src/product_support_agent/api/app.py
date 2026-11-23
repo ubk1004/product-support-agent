@@ -14,6 +14,7 @@ from starlette.responses import Response
 
 from product_support_agent.catalog import CatalogClient
 from product_support_agent.chat import (
+    ChatExecution,
     ChatModelUnavailable,
     ChatService,
     SearchUnavailable,
@@ -141,6 +142,12 @@ async def catalog_coverage() -> CoverageReport:
     return build_coverage_report(manifest, source_map, records, retrieval_enabled=True)
 
 
+def _chat_outcome(execution: ChatExecution) -> str:
+    if execution.content_filtered:
+        return "content_filtered"
+    return "grounded" if execution.response.grounded else "no_evidence"
+
+
 def get_chat_service() -> ChatService:
     global _chat_service
     if _chat_service is None:
@@ -163,7 +170,11 @@ async def chat(payload: dict[str, object]) -> dict[str, object]:
         async with _chat_concurrency:
             service = get_chat_service()
             execution = await asyncio.wait_for(
-                service.answer(chat_request.message, chat_request.product_ids),
+                service.answer(
+                    chat_request.message,
+                    chat_request.product_ids,
+                    chat_request.history,
+                ),
                 timeout=CHAT_TIMEOUT_SECONDS,
             )
     except UncoveredProductError as error:
@@ -202,7 +213,7 @@ async def chat(payload: dict[str, object]) -> dict[str, object]:
 
     logger.info(
         "chat completed outcome=%s latency_ms=%d input_tokens=%s output_tokens=%s",
-        "grounded" if execution.response.grounded else "no_evidence",
+        _chat_outcome(execution),
         round((time.perf_counter() - started_at) * 1000),
         execution.input_tokens,
         execution.output_tokens,

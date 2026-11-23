@@ -407,7 +407,7 @@ Accepted deferrals and where they are now handled:
 | Exit criterion | Result | Evidence |
 |---|---|---|
 | One command starts a healthy, loopback-bound local stack | Pass | `podman compose config --quiet`; API and web images built; Compose health checks passed; browser chat returned a cited answer |
-| Evaluation meets all three demo targets | Pass | 12/15 expected-source hits (80.0%); 28/28 citation URL matches (100%); 3/3 unanswerable questions refused |
+| Evaluation meets all three demo targets | Pass at the time (v1) | 12/15 expected-source hits (80.0%); 28/28 citation URL matches (100%); 3/3 unanswerable questions refused. Superseded on 2026-11-23 by the v2 set with a claim-support check; claim support varied between runs and is not reliably above 80% (see [the report](./operations/phase-6-evaluation-v2.md)) |
 | Semantic-ranker outcome is recorded without unverified service changes | Pass | Tier and billing could not be verified; report records not evaluated and no setting was changed |
 | Clean-checkout runbook documents setup, first ingestion/indexing, chat, evaluation, and data-preserving teardown | Pass | Updated [local development](./operations/local-development.md) and verified the documented Compose startup command |
 | Request metadata is logged without query or response text | Pass | Live chat check recorded request ID, latency, token counts, and outcome; query and response text were not logged |
@@ -426,6 +426,18 @@ Accepted deferrals and where they are now handled:
 **Exit criteria:** On a clean checkout with `.env` filled, the runbook brings up the demo, a question returns a cited answer, the evaluation meets its demo targets, and all routine checks pass.
 
 **Production-only (recorded, not done here):** human-reviewed evaluation set and thresholds, latency and cost SLOs, OpenTelemetry to Azure Monitor, a red-team suite in CI, retention policy approval, and a MongoDB snapshot or restore procedure.
+
+### Post-phase demo hardening (2026-11-23)
+
+After the Phase 6 close, a review against the original brief led to these changes, all covered by offline tests and a live evaluation:
+
+* The agent gained a `list_products` tool and short conversation context, so it can answer which products are covered and follow-up questions.
+* Citations are renumbered by first use and show the product name; the UI shows a conversation, starter questions, an indexed-only product filter, and refusal guidance.
+* Catalog discovery skips a protected search API and uses the feed; `scripts/create_manifest.py` is the runnable path.
+* Ingestion indexes into and deletes from Azure AI Search in the same run.
+* Evaluation v2 adds a model-judged claim-support check and adversarial refusal cases. Claim support varied between runs (71.4%, 76.9%, 83.3%), so the 80% target is not reliably met.
+* A design-only [Service Management expansion](./architecture/service-management-expansion.md) was added.
+* A recorded walkthrough lives in `docs/demo/`.
 
 ### Phase 7: Cloud architecture, IaC, and CI/CD definitions
 

@@ -137,7 +137,7 @@ uv run python scripts/run_evaluation.py --api-url http://127.0.0.1:8000
 ```
 
 Results are recorded in
-[`phase-6-evaluation-v1.md`](./phase-6-evaluation-v1.md). Semantic reranking
+[`phase-6-evaluation-v2.md`](./phase-6-evaluation-v2.md). Semantic reranking
 was not enabled because the Search service tier and billing plan could not be
 verified; no service setting was changed.
 

@@ -2,7 +2,7 @@
 title: Product Support Agent
 description: Local demo of a grounded product support assistant, including architecture, setup, configuration, Azure prerequisites, and quality checks
 author: Udaybhanu Karmakar
-ms.date: 2026-11-22
+ms.date: 2026-11-23
 ms.topic: overview
 keywords:
   - product support
@@ -10,6 +10,35 @@ keywords:
   - Microsoft Foundry
   - Azure AI Search
 ---
+
+## Watch the demo
+
+[![Product Support Agent demo: coverage, a cited answer, a follow-up, and refusals](docs/demo/poster.png)](docs/demo/product-support-agent-demo.webm)
+
+The [short walkthrough](docs/demo/product-support-agent-demo.webm) (select the
+link to play it) shows, in this order:
+
+1. **Scope first.** A fixed sample of 100 OpenText products, of which **10** have
+   documentation indexed (300 pages). The other 90 are listed as not covered.
+2. **What it covers.** The agent lists the products it can answer about.
+3. **A cited answer.** Every claim has a numbered source that links to the exact
+   documentation page.
+4. **A follow-up question** that keeps the conversation context.
+5. **A product that is not indexed**, which it says it cannot answer.
+6. **A hostile prompt**, which is refused and produces no invented links.
+
+To regenerate the video against a running stack, see
+[scripts/demo/](scripts/demo/README.md).
+
+## Key facts at a glance
+
+| Question | Answer |
+|---|---|
+| What is this? | A grounded product-support assistant. Answers come only from indexed public documentation, and every claim cites a retrieved source. |
+| What does it cover? | **10 of 100** sampled products (300 pages). It does not answer about the other 90 and says so. |
+| Is it production ready? | No. It is a local demo; nothing is deployed to Azure. See the [production gap register](docs/operations/production-gap-register.md). |
+| How good are the answers? | See [Evaluation results](#evaluation-results) for the measured results and their limits. |
+| What did not work as specified? | See [Source deviation](#source-deviation-from-the-original-brief). |
 
 ## Executive summary
 
@@ -26,9 +55,8 @@ processing; Azurite starts in Compose but is not wired into the current
 workflow. MongoDB and Azurite run in Podman, not in Azure.
 
 The approved source map covers 10 of the 100 manifest products. It has ingested
-300 pages and indexed 952 chunks. The Phase 6 evaluation reached 80.0% expected
-source hits in the top five, 100% citation URL matches, and 3/3 refusals for
-unanswerable questions. See the [evaluation report](docs/operations/phase-6-evaluation-v1.md).
+300 pages and indexed 952 chunks. See [Evaluation results](#evaluation-results)
+for the measured results and what they do and do not show.
 
 This is a local demo, not a production service. The cloud application stack is
 not deployed. Production-only controls and blocking triggers are listed in the
@@ -39,21 +67,92 @@ delivery boundaries are recorded in [ADR-0007](docs/architecture/decisions/adr-0
 
 | Audience | Start here |
 |---|---|
-| Executive and product stakeholders | This overview, [demo outcomes](docs/operations/phase-6-evaluation-v1.md), [implementation status](docs/implementation-plan.md), and [production gap register](docs/operations/production-gap-register.md) |
+| Executive and product stakeholders | This overview, [demo outcomes](docs/operations/phase-6-evaluation-v2.md), [implementation status](docs/implementation-plan.md), and [production gap register](docs/operations/production-gap-register.md) |
 | Technical architects | [Architecture overview](docs/architecture/architecture-overview.md), [decision register](docs/architecture/decision-register.md), [ADRs](docs/architecture/decisions/), [risk assumptions](docs/architecture/risk-assumptions.md), and [security posture](docs/security/security-posture.md) |
 | Developers | [Local development runbook](docs/operations/local-development.md), [environment configuration](#configuration-and-environment-variables), [backend](src/product_support_agent/), and [web app](apps/web/) |
-| Quality assurance | [Test and evaluation guidance](#quality-assurance), [evaluation report](docs/operations/phase-6-evaluation-v1.md), [test suite](tests/), and [threat register](docs/security/threat-register.md) |
+| Quality assurance | [Test and evaluation guidance](#quality-assurance), [evaluation report](docs/operations/phase-6-evaluation-v2.md), [test suite](tests/), and [threat register](docs/security/threat-register.md) |
+
+## Source deviation from the original brief
+
+The brief asks the ingestion to use the product listing page and the search API,
+with the feed as the fallback, and to skip anything that needs authentication.
+What happened, checked against live responses:
+
+| Source | Result | What the code does |
+|---|---|---|
+| `my.opentext.com/support/products/` (listing) | HTTP 200, but the page is client-rendered and has no usable product data | Treated as empty; the next source is tried |
+| `.../api/web/support/search-results` | HTTP **401** for anonymous callers | Treated as protected: skipped, never retried with credentials, recorded in `CatalogOutcome.notes` |
+| `.../api/web/feed/product` | HTTP 200 with 1,302 parseable products | Used as the catalog; `scripts/create_manifest.py` selects the 100 products |
+| `my.opentext.com/support/products/{slug}` pages | Client-rendered, so they yielded no text and looked login-protected | Used only as the product's support-page link |
+| Documentation sites (`docs.microfocus.com`, `admhelp.microfocus.com`) | Anonymous, documented delivery paths found for 10 of the 100 products | Ingested through a versioned [source map](docs/operations/phase-3-source-map-v1.json) |
+
+Consequences you should know about:
+
+* Only **10 of 100** products have indexed documentation. For the other 90, the
+  status is "no approved public source found". That means this demo did not
+  verify a public source for them, not that none exists.
+* The product page content on `my.opentext.com` is not the source of answers.
+  Answers come from the documentation sites above.
+* Source terms and reuse rights are unverified, and that review is a production
+  gate. See [ADR-0002](docs/architecture/decisions/adr-0002-source-access-and-manifest.md)
+  and [ADR-0006](docs/architecture/decisions/adr-0006-periodic-resumable-source-ingestion.md).
+
+To build a manifest from the catalog (it needs network access to
+`my.opentext.com` and refuses to overwrite an existing file unless you pass
+`--replace`):
+
+```powershell
+uv run python scripts/create_manifest.py --manifest-version opentext-YYYY-MM-DD-v2 --output docs/operations/manifest-new.json
+```
+
+## What "grounded" means here
+
+The API response has a `grounded` flag. It is true when the answer kept at least
+one citation whose URL came from this request's retrieved evidence. That makes
+links trustworthy, because the server builds them and the model cannot invent
+them. It does **not** prove every sentence is supported by its source. The
+[evaluation](#evaluation-results) measures that separately with a model judge,
+which is a screening check and not a guarantee.
+
+## Evaluation results
+
+The offline evaluation (`scripts/run_evaluation.py`, question set `phase-6-v2`)
+has 15 answerable questions plus 6 that should be refused: 3 off-topic and 3
+adversarial (prompt injection, a request to invent a link, an unsupported
+claim). The latest report is
+[phase-6-evaluation-v2.md](docs/operations/phase-6-evaluation-v2.md).
+
+| Measure | Latest run | What it means | Limit |
+|---|---:|---|---|
+| Expected-source hit in top five | 12/15 (80.0%) | The page a person would expect is among the first five results | Small, synthetic set; 3 questions miss in every run |
+| Citation validity | 17/17 (100%) | Every citation is a URL retrieved for that question | Checks links, not claims |
+| Claim support | 10/12 (83.3%) | A judge model checks the answer against the full text of the pages it cites | Model-judged by the same model family that answers; needs human review |
+| Refusals | 6/6 | Off-topic and adversarial questions get the standard refusal with no citations | 6 questions only |
+
+**Results vary between runs.** Three full runs of the same set gave claim
+support of 71.4%, 76.9%, and 83.3%, and refusals of 6/6, 5/6, and 6/6. The
+first run cut the judge's source text at 12,000 characters, which produced at
+least one false "unsupported" verdict, so the limit was raised. Only the latest
+run meets the 80% claim-support target, so treat the target as **not reliably
+met**. In the latest run three answerable questions returned no citations (the
+agent declined to answer), which lowers the judged count instead of failing it.
+Do not quote one run as a quality guarantee; the next steps are a larger
+question set, repeated runs with a reported range, and human review of
+judged answers.
 
 ## What the demo includes
 
-* A Next.js interface with coverage disclosure, chat, transient client-side
-  exchange state, and citation links.
-* A FastAPI endpoint that coordinates Microsoft Agent Framework, hybrid search,
-  request limits, metadata-only logs, and server-side citation binding.
+* A Next.js chat interface with coverage disclosure, starter questions, a
+  product filter, a conversation kept only in the browser tab, numbered source
+  links beside each answer, and clear messages when it cannot answer.
+* A FastAPI endpoint that coordinates Microsoft Agent Framework with two tools
+  (`search_documentation` and `list_products`), hybrid search, request limits,
+  metadata-only logs, and server-side citation binding.
 * A resumable, request-bounded ingestion worker that reads only the versioned
-  source map and respects source access controls.
-* A synthetic evaluation set covering 15 answerable questions and 3
-  unanswerable questions.
+  source map, respects source access controls, and keeps Azure AI Search in step
+  with MongoDB (it indexes new pages and deletes removed ones in the same run).
+* A synthetic evaluation set with answerable, off-topic, and adversarial
+  questions, including a claim-support check.
 * A Podman Compose stack that binds published ports to `127.0.0.1`.
 
 The model is not allowed to supply citation URLs. Retrieved source text and
@@ -287,14 +386,25 @@ alongside the [architecture overview](docs/architecture/architecture-overview.md
 
 1. The source worker reads only
    [`phase-3-source-map-v1.json`](docs/operations/phase-3-source-map-v1.json)
-   and stores permitted canonical pages and fetch state in local MongoDB.
-2. `scripts/index_documents.py` creates or updates a versioned Azure AI Search
-   index and writes chunks/vectors using the Foundry embedding deployment.
+   and stores permitted canonical pages and fetch state in local MongoDB. In
+   the same run it creates or updates the versioned Azure AI Search index,
+   writes chunks and vectors using the Foundry embedding deployment, and
+   deletes pages that left the selection from both stores. Use
+   `--repository-only` to skip Search. `scripts/index_documents.py` rebuilds
+   the index from MongoDB, for example after an embedding model change.
 3. The browser sends chat requests to Next.js. The server-side route calls
-   FastAPI; the agent retrieves filtered evidence from Azure AI Search and
-   calls the Foundry chat deployment.
-4. The API binds cited evidence IDs to retrieved source URLs. The UI renders
-   answers as plain text and links from the citation list only.
+   FastAPI; the agent retrieves filtered evidence from Azure AI Search (or
+   looks up the product catalog) and calls the Foundry chat deployment.
+4. The API binds cited evidence IDs to retrieved source URLs and numbers them
+   by first use. The UI renders answers as plain text with linked markers, and
+   the source links come only from the citation list.
+
+The ingestion queue (`queue.py`, Azurite) is implemented and tested, but the
+demo does not use it: the source worker runs directly from the source map. It
+is the intended path when ingestion moves to the cloud.
+
+The OpenText Service Management expansion is a design only; see
+[service-management-expansion.md](docs/architecture/service-management-expansion.md).
 
 See the [architecture overview](docs/architecture/architecture-overview.md)
 for diagrams and [ADR-0005](docs/architecture/decisions/adr-0005-ui-and-backend-technology.md)
@@ -341,7 +451,7 @@ Run the local evaluation after Compose is healthy:
 uv run python scripts/run_evaluation.py --api-url http://127.0.0.1:8000
 ```
 
-See the [evaluation report](docs/operations/phase-6-evaluation-v1.md) for the
+See the [evaluation report](docs/operations/phase-6-evaluation-v2.md) for the
 current baseline and [implementation plan](docs/implementation-plan.md) for
 phase completion evidence.
 

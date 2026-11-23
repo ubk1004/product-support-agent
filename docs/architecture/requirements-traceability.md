@@ -19,30 +19,30 @@ Source numbering refers to [Instructions.md](../../Instructions.md).
 
 ## Traceability matrix
 
-| # | Requirement summary | Planned component or artifact | Phase | Verification evidence |
-|---:|---|---|---:|---|
-| 1 | Discover public products/resources; parameterized hard cap of 100; disclose products successfully indexed | Catalog, manifest, source map, source ingestion worker, `GET /catalog/coverage`, Next.js coverage view | 0, 2, 3, 5 | Stubbed catalog/worker tests; approved manifest; `test_phase_three_coverage.py`; the coverage view renders the summary, table, and unavailable states; a bounded live run is pending authorization |
-| 2 | Handle empty catalogs, 429, and exponential backoff | Catalog, ingestion workers, fetch state | 2, 3 | Unit tests for empty results, `Retry-After`, retry caps, backoff, host abort on 429, product fail-fast, and resume after restart without refetching |
-| 3 | Normalize canonical documents for idempotent and delta updates | Canonical document schema, indexer, fetch state | 3 | Schema, hash, update, and deletion tests; tests for unchanged revisions and bodies, conditional GETs, and removed pages |
-| 4 | Support keyword, metadata, and semantic search | Azure AI Search retrieval adapter | 3 | Dedicated index integration and reviewed relevance set |
-| 5 | Preserve source URLs in results | Canonical provenance and retrieval response | 3, 4 | Source ID/URL preservation and citation-binding tests |
-| 6 | Use structured tool calling and RAG | Agent Framework agent and retrieval tool | 4 | Tool schema, fake gateway, grounded answer end-to-end tests |
-| 7 | Ground output; defend against injection; redact sensitive telemetry | Agent, response validation, telemetry | 0b, 4, 6 | Abuse tests, citation checks, synthetic secret/PII redaction tests |
-| 8 | Hide prior searches in UI; retain demo queries/responses only after privacy approval, with a selective off control | Next.js and privacy-controlled telemetry store | 0, 0b, 5, 6 | UI no-history tests; retention flag defaults off; notice, access, redaction, TTL, and deletion verified before enabling |
-| 9 | Put chat and embedding models behind a replaceable gateway | LiteLLM and gateway contract | 0, 4, 6 | Fake gateway contract tests; approved Foundry deployment configuration |
-| 10 | Bind every claim to retrieved source ID/URL; prohibit invented links | Retrieval response and server-side citation renderer | 3, 4 | Citation provenance and unsupported-claim end-to-end tests |
-| 11 | OpenTelemetry tracing, logging, and metrics | Instrumented services and approved collector | 6 | Trace inspection plus no-sensitive-content checks |
-| 12 | Offline evaluation dataset | Versioned evaluation fixtures | 2, 6 | Deterministic evaluation run against agreed thresholds |
-| 13 | Gateway, identity, CI, deployment, SAST/DAST/IAST | Phase 7 design and separately gated deployment work | 0, 7, 8 | CI security checks; infrastructure validation; deployment checks only after approval |
-| 14 | Production path includes usefulness and accessibility validation | Usability plan, accessibility checks, production gap register | 0, 5, 9 | Moderated task evidence, manual accessibility review, approved gap register |
-| 15 | End-to-end testability and phase-specific tests | Unit, integration, end-to-end, and evaluation suites | 0-7 | Applicable phase gates and deterministic routine tests |
-| 16 | Readable repository, ADRs, architecture documents, Mermaid diagrams | `docs/architecture/` and approved project layout | 0, 1 | Link/diagram review and clean-checkout documentation checks |
-| 17 | Python, FastAPI, React/Next.js, Agent Framework, Mongo-compatible data, Azure AI Search, LiteLLM, Podman | Application and local service architecture | 0, 1-6 | Dependency/config checks and integrated local run |
-| 18 | Bicep, network isolation, monitoring, and secure Azure service layout | `infra/bicep/` design | 7 | Bicep build and lint authored and statically validated; not deployed |
-| 19 | Build UI, API, and agent code | GitHub Actions validation/build workflow | 1, 7 | Workflow authored and statically validated; no Azure access required for checks |
-| 20 | Deploy UI, API, and agent code | Guarded application deployment workflow | 7, 8 | Manual `workflow_dispatch` only; no deployment run |
-| 21 | Host backend on Azure Container Apps | Cloud architecture and Bicep | 7, 8 | Designed in Bicep, statically validated, not deployed |
-| 22 | Use GitHub Actions for build and deployment | GitHub Actions workflows | 1, 7, 8 | Workflows authored, SHA-pinned, and action-linted; no deployment run |
+| # | Requirement summary | Planned component or artifact | Phase | Verification evidence | Status on 2026-11-23 |
+|---:|---|---|---:|---|---|
+| 1 | Discover public products/resources; parameterized hard cap of 100; disclose products successfully indexed | Catalog, manifest, `scripts/create_manifest.py`, source map, source ingestion worker, `GET /catalog/coverage`, Next.js coverage view | 0, 2, 3, 5 | Stubbed catalog/worker tests, including protected-search to feed fallback; approved manifest; `test_phase_three_coverage.py`; live run stored 300 pages | Done for 10 of 100 products; the other 90 have no verified public source |
+| 2 | Handle empty catalogs, 429, and exponential backoff | Catalog, ingestion workers, fetch state | 2, 3 | Unit tests for empty results, `Retry-After`, retry caps, backoff, host abort on 429, product fail-fast, and resume after restart without refetching | Done; unit-tested |
+| 3 | Normalize canonical documents for idempotent and delta updates | Canonical document schema, indexer, fetch state | 3 | Schema, hash, update, and deletion tests; tests for unchanged revisions and bodies, conditional GETs, and removed pages | Done; unit-tested |
+| 4 | Support keyword, metadata, and semantic search | Azure AI Search retrieval adapter | 3 | Dedicated index integration and reviewed relevance set | Done (hybrid text and vector); semantic ranker not evaluated |
+| 5 | Preserve source URLs in results | Canonical provenance and retrieval response | 3, 4 | Source ID/URL preservation and citation-binding tests | Done |
+| 6 | Use structured tool calling and RAG | Agent Framework agent and retrieval tool | 4 | Tool schema, fake gateway, grounded answer end-to-end tests | Done; two tools (`search_documentation`, `list_products`) |
+| 7 | Ground output; defend against injection; redact sensitive telemetry | Agent, response validation, telemetry | 0b, 4, 6 | Abuse tests, citation checks, synthetic secret/PII redaction tests | Partly done: grounding and injection defenses tested; telemetry redaction tested; no OpenTelemetry |
+| 8 | Hide prior searches in UI; retain demo queries/responses only after privacy approval, with a selective off control | Next.js and privacy-controlled telemetry store | 0, 0b, 5, 6 | UI no-history tests; retention flag defaults off; notice, access, redaction, TTL, and deletion verified before enabling | Done for the UI (no past sessions shown); query/response retention not implemented |
+| 9 | Put chat and embedding models behind a replaceable gateway | LiteLLM and gateway contract | 0, 4, 6 | Fake gateway contract tests; approved Foundry deployment configuration | Partly done: OpenAI-compatible Foundry endpoint configurable; LiteLLM and APIM not wired |
+| 10 | Bind every claim to retrieved source ID/URL; prohibit invented links | Retrieval response and server-side citation renderer | 3, 4 | Citation provenance and forged-ID unit tests; evaluation v2 claim-support check | Links: done. Claims: model-judged screening in evaluation v2, not a guarantee |
+| 11 | OpenTelemetry tracing, logging, and metrics | Instrumented services and approved collector | 6 | Trace inspection plus no-sensitive-content checks | **Not done**: metadata-only JSON logs with request IDs only |
+| 12 | Offline evaluation dataset | Versioned evaluation fixtures | 2, 6 | Deterministic evaluation run against agreed thresholds | Done; v2 adds claim support and adversarial cases |
+| 13 | Gateway, identity, CI, deployment, SAST/DAST/IAST | Phase 7 design and separately gated deployment work | 0, 7, 8 | CI security checks; infrastructure validation; deployment checks only after approval | Partly done: CI static checks; no DAST/IAST; no managed-identity runtime; not deployed |
+| 14 | Production path includes usefulness and accessibility validation | Usability plan, accessibility checks, production gap register | 0, 5, 9 | Moderated task evidence, manual accessibility review, approved gap register | Not done: no moderated usability study or manual accessibility audit |
+| 15 | End-to-end testability and phase-specific tests | Unit, integration, end-to-end, and evaluation suites | 0-7 | Applicable phase gates and deterministic routine tests | Unit and offline tests done; live integration tests are opt-in; no browser end-to-end suite |
+| 16 | Readable repository, ADRs, architecture documents, Mermaid diagrams | `docs/architecture/` and approved project layout | 0, 1 | Link/diagram review and clean-checkout documentation checks | Done |
+| 17 | Python, FastAPI, React/Next.js, Agent Framework, Mongo-compatible data, Azure AI Search, LiteLLM, Podman | Application and local service architecture | 0, 1-6 | Dependency/config checks and integrated local run | Done locally, except LiteLLM |
+| 18 | Bicep, network isolation, monitoring, and secure Azure service layout | `infra/bicep/` design | 7 | Bicep build and lint authored and statically validated; not deployed | Authored and statically validated; **not deployed**; APIM not yet in external VNet mode |
+| 19 | Build UI, API, and agent code | GitHub Actions validation/build workflow | 1, 7 | Workflow authored and statically validated; no Azure access required for checks | Authored and linted; hosted CI runs not verified |
+| 20 | Deploy UI, API, and agent code | Guarded application deployment workflow | 7, 8 | Manual `workflow_dispatch` only; no deployment run | Authored; never run |
+| 21 | Host backend on Azure Container Apps | Cloud architecture and Bicep | 7, 8 | Designed in Bicep, statically validated, not deployed | Designed in Bicep; not deployed |
+| 22 | Use GitHub Actions for build and deployment | GitHub Actions workflows | 1, 7, 8 | Workflows authored, SHA-pinned, and action-linted; no deployment run | Authored; hosted runs not verified |
 
 ## Traceability constraints
 

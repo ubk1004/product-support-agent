@@ -1,0 +1,13 @@
+{
+  "name": "product-support-agent-demo-recorder",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Records the demo walkthrough video against the running local stack.",
+  "type": "module",
+  "scripts": {
+    "record": "node record-demo.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.65.1"
+  }
+}

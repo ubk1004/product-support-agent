@@ -98,17 +98,50 @@ def test_malformed_search_falls_back_to_feed() -> None:
 
 
 @pytest.mark.parametrize("status", [401, 403])
-def test_protected_search_does_not_use_feed(status: int) -> None:
+def test_protected_search_is_skipped_and_the_feed_is_used(status: int) -> None:
     calls = []
 
     def handler(request):
         calls.append(request.url.path)
-        return httpx.Response(200, text="") if len(calls) == 1 else httpx.Response(status)
+        if request.url.path.endswith("/products/"):
+            return httpx.Response(200, text="")
+        if request.url.path.endswith("search-results"):
+            return httpx.Response(status)
+        return httpx.Response(200, json=[item(3), item(1)])
 
     outcome = discover(handler)
-    assert calls == ["/support/products/", "/api/web/support/search-results"]
+    assert calls == [
+        "/support/products/",
+        "/api/web/support/search-results",
+        "/api/web/feed/product",
+    ]
+    assert outcome.source == "feed"
+    assert [p.product_id for p in outcome.products] == ["p001", "p003"]
+    assert outcome.notes == ["listing: empty", "search: protected"]
+
+
+def test_protected_search_and_protected_feed_yield_no_catalog() -> None:
+    def handler(request):
+        if request.url.path.endswith("/products/"):
+            return httpx.Response(200, text="")
+        return httpx.Response(401)
+
+    outcome = discover(handler)
     assert outcome.products == []
-    assert outcome.reason == "search protected; fallback feed not used"
+    assert outcome.source == "feed"
+    assert outcome.reason == "protected"
+    assert outcome.notes == ["listing: empty", "search: protected"]
+
+
+def test_credentials_are_never_sent_to_protected_endpoints() -> None:
+    seen = []
+
+    def handler(request):
+        seen.append((request.headers.get("authorization"), request.headers.get("cookie")))
+        return httpx.Response(401)
+
+    discover(handler)
+    assert seen and all(pair == (None, None) for pair in seen)
 
 
 def test_empty_catalog_has_no_products_and_an_explicit_reason() -> None:
@@ -284,7 +317,7 @@ def test_malformed_feed_has_explicit_failure_reason() -> None:
     assert outcome.reason == "malformed"
 
 
-def test_login_search_response_does_not_trigger_feed() -> None:
+def test_login_search_response_is_skipped_and_the_feed_is_tried() -> None:
     paths = []
 
     def handler(request):
@@ -294,9 +327,14 @@ def test_login_search_response_does_not_trigger_feed() -> None:
         return httpx.Response(200, text="<form>Please sign in</form>")
 
     outcome = discover(handler)
-    assert paths == ["/support/products/", "/api/web/support/search-results"]
+    assert paths == [
+        "/support/products/",
+        "/api/web/support/search-results",
+        "/api/web/feed/product",
+    ]
     assert outcome.products == []
-    assert outcome.reason == "search protected; fallback feed not used"
+    assert outcome.reason == "protected"
+    assert outcome.notes == ["listing: empty", "search: protected"]
 
 
 def test_catalog_does_not_request_non_allowlisted_listing_url() -> None:
@@ -308,10 +346,11 @@ def test_catalog_does_not_request_non_allowlisted_listing_url() -> None:
 
     outcome = discover(handler, listing_url="https://evil.example/products")
     assert paths == [
-        "https://my.opentext.com/api/web/support/search-results?start=1&maxResults=100&text=%2A"
+        "https://my.opentext.com/api/web/support/search-results?start=1&maxResults=100&text=%2A",
+        "https://my.opentext.com/api/web/feed/product",
     ]
     assert outcome.products == []
-    assert outcome.reason == "search protected; fallback feed not used"
+    assert outcome.reason == "protected"
 
 
 @pytest.mark.parametrize("limit", [0, 101])

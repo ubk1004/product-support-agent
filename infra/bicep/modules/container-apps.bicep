@@ -60,6 +60,15 @@ param foundryChatDeployment string
 @maxLength(64)
 param foundryEmbeddingDeployment string
 
+@description('Embedding model version recorded in the Azure AI Search index name; must match the deployment.')
+@minLength(1)
+@maxLength(64)
+param embeddingModelVersion string
+
+@description('Embedding vector dimensions; must match the deployment and the index.')
+@minValue(1)
+param embeddingDimensions int
+
 @description('API container image reference.')
 @minLength(1)
 @maxLength(512)
@@ -196,6 +205,14 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'AZURE_OPENAI_EMBEDDING_DEPLOYMENT'
               value: foundryEmbeddingDeployment
+            }
+            {
+              name: 'PRODUCT_SUPPORT_SEARCH_EMBEDDING_MODEL_VERSION'
+              value: embeddingModelVersion
+            }
+            {
+              name: 'PRODUCT_SUPPORT_SEARCH_EMBEDDING_DIMENSIONS'
+              value: string(embeddingDimensions)
             }
             {
               name: 'AZURE_OPENAI_API_KEY'
@@ -350,6 +367,14 @@ resource ingestionJob 'Microsoft.App/jobs@2024-03-01' = {
             {
               name: 'AZURE_OPENAI_EMBEDDING_DEPLOYMENT'
               value: foundryEmbeddingDeployment
+            }
+            {
+              name: 'PRODUCT_SUPPORT_SEARCH_EMBEDDING_MODEL_VERSION'
+              value: embeddingModelVersion
+            }
+            {
+              name: 'PRODUCT_SUPPORT_SEARCH_EMBEDDING_DIMENSIONS'
+              value: string(embeddingDimensions)
             }
             {
               name: 'AZURE_OPENAI_API_KEY'

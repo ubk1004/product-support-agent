@@ -47,13 +47,13 @@ function CoverageSummary({ report }: { report: CoverageReport }) {
           <p className="status-copy">
             {summary.pages_indexed} documentation pages from{" "}
             {summary.products_with_sources} products with an approved public
-            source. Every other product is listed as not covered, and no answer
-            will be given for it.
+            source. The assistant answers only about these products; the rest of
+            the sample is listed below as not covered.
           </p>
           {report.retrieval_enabled ? null : (
             <p className="status-copy">
-              Chat is not enabled in this phase, so these pages are stored but
-              not yet searchable.
+              Search is not enabled, so these pages are stored but not yet
+              searchable.
             </p>
           )}
         </div>
@@ -94,14 +94,17 @@ function ProductRow({ product }: { product: ProductCoverage }) {
   );
 }
 
-function CoverageTable({ report }: { report: CoverageReport }) {
+function CoverageRows({
+  products,
+  caption,
+}: {
+  products: ProductCoverage[];
+  caption: string;
+}) {
   return (
     <div className="table-wrap">
       <table>
-        <caption className="visually-hidden">
-          Demo catalog coverage by product, indexed products first. Manifest{" "}
-          {report.manifest_version}; source list {report.source_map_version}.
-        </caption>
+        <caption className="visually-hidden">{caption}</caption>
         <thead>
           <tr>
             <th scope="col">Product</th>
@@ -113,12 +116,50 @@ function CoverageTable({ report }: { report: CoverageReport }) {
           </tr>
         </thead>
         <tbody>
-          {report.products.map((product) => (
+          {products.map((product) => (
             <ProductRow key={product.product_id} product={product} />
           ))}
         </tbody>
       </table>
     </div>
+  );
+}
+
+function CoverageTable({ report }: { report: CoverageReport }) {
+  const indexed = report.products.filter(
+    (product) => product.status === "indexed",
+  );
+  const others = report.products.filter(
+    (product) => product.status !== "indexed",
+  );
+  const versions = `Manifest ${report.manifest_version}; source list ${report.source_map_version}.`;
+  return (
+    <>
+      {indexed.length ? (
+        <CoverageRows
+          products={indexed}
+          caption={`Products with indexed documentation. ${versions}`}
+        />
+      ) : (
+        <p className="status-copy">No product has indexed documentation yet.</p>
+      )}
+      {others.length ? (
+        <details className="coverage-others">
+          <summary>
+            Show the other {others.length} demo products (not searchable)
+          </summary>
+          <p className="status-copy">
+            These products are in the demo sample, but their documentation is
+            not indexed. The assistant can tell you they are in the catalog, but
+            it will not answer questions about them.
+          </p>
+          <CoverageRows
+            products={others}
+            caption={`Demo products without indexed documentation. ${versions}`}
+          />
+        </details>
+      ) : null}
+    </>
   );
 }
 
@@ -160,11 +201,27 @@ export default async function HomePage() {
         )}
       </section>
 
-      <ChatPanel products={result.ok ? result.report.products : []} />
+      <ChatPanel
+        products={
+          result.ok
+            ? result.report.products
+                .filter((product) => product.status === "indexed")
+                .map(({ product_id, product_name }) => ({
+                  product_id,
+                  product_name,
+                }))
+            : []
+        }
+      />
 
       {result.ok ? (
         <section className="coverage" aria-labelledby="coverage-title">
           <h2 id="coverage-title">Demo catalog coverage</h2>
+          <p className="coverage-intro">
+            This demo ingested a fixed random sample of{" "}
+            {result.report.summary.manifest_products} products to avoid extra
+            infrastructure and load on OpenText's sites.
+          </p>
           <CoverageTable report={result.report} />
         </section>
       ) : null}
