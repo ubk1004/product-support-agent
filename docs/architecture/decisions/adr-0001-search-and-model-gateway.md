@@ -1,7 +1,7 @@
 ---
 title: ADR-0001 Search and Model Gateway
 description: Proposed search and model-provider boundaries for the product support agent
-author: Product Support Agent Team
+author: Udaybhanu Karmakar
 ms.date: 2026-11-21
 ms.topic: decision
 keywords:

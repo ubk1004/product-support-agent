@@ -1,7 +1,7 @@
 ---
 title: Azure Infrastructure Design
 description: Design-only Bicep architecture and CI/CD bootstrap for the local-first demo
-author: Product Support Agent Team
+author: Udaybhanu Karmakar
 ms.date: 2026-11-22
 ms.topic: reference
 keywords:

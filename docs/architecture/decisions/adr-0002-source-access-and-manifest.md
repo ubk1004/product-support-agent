@@ -1,7 +1,7 @@
 ---
 title: ADR-0002 Source Access and Product Manifest
 description: Proposed anonymous source access and stable demo-catalog policy
-author: Product Support Agent Team
+author: Udaybhanu Karmakar
 ms.date: 2026-11-21
 ms.topic: decision
 keywords:

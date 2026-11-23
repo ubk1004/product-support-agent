@@ -1,7 +1,7 @@
 ---
 title: Product Support Agent Requirements Traceability
 description: Maps the numbered requirements in Instructions.md to planned components, phases, and verification
-author: Product Support Agent Team
+author: Udaybhanu Karmakar
 ms.date: 2026-11-22
 ms.topic: reference
 keywords:
@@ -38,11 +38,11 @@ Source numbering refers to [Instructions.md](../../Instructions.md).
 | 15 | End-to-end testability and phase-specific tests | Unit, integration, end-to-end, and evaluation suites | 0-7 | Applicable phase gates and deterministic routine tests |
 | 16 | Readable repository, ADRs, architecture documents, Mermaid diagrams | `docs/architecture/` and approved project layout | 0, 1 | Link/diagram review and clean-checkout documentation checks |
 | 17 | Python, FastAPI, React/Next.js, Agent Framework, Mongo-compatible data, Azure AI Search, LiteLLM, Podman | Application and local service architecture | 0, 1-6 | Dependency/config checks and integrated local run |
-| 18 | Bicep, network isolation, monitoring, and secure Azure service layout | `infra/bicep/` conceptual design | 7 | L0-L3 static validation; network-slice validation only after approval |
-| 19 | Build UI, API, and agent code | GitHub Actions validation/build workflow | 1, 7 | CI build and quality checks without Azure |
-| 20 | Deploy UI, API, and agent code | Guarded application deployment workflow | 7, 8 | Workflow remains disabled until a separate deployment approval |
-| 21 | Host backend on Azure Container Apps | Cloud architecture and Bicep | 7, 8 | Static design checks; cloud runtime validation deferred |
-| 22 | Use GitHub Actions for build and deployment | GitHub Actions workflows | 1, 7, 8 | Action linting, SHA pinning, permission review, protected-environment checks |
+| 18 | Bicep, network isolation, monitoring, and secure Azure service layout | `infra/bicep/` design | 7 | Bicep build and lint authored and statically validated; not deployed |
+| 19 | Build UI, API, and agent code | GitHub Actions validation/build workflow | 1, 7 | Workflow authored and statically validated; no Azure access required for checks |
+| 20 | Deploy UI, API, and agent code | Guarded application deployment workflow | 7, 8 | Manual `workflow_dispatch` only; no deployment run |
+| 21 | Host backend on Azure Container Apps | Cloud architecture and Bicep | 7, 8 | Designed in Bicep, statically validated, not deployed |
+| 22 | Use GitHub Actions for build and deployment | GitHub Actions workflows | 1, 7, 8 | Workflows authored, SHA-pinned, and action-linted; no deployment run |
 
 ## Traceability constraints
 

@@ -1,7 +1,7 @@
 ---
 title: Product Support Agent Support Ownership
 description: Proposed responsibility and escalation outline for the MVP and later cloud design
-author: Product Support Agent Team
+author: Udaybhanu Karmakar
 ms.date: 2026-11-22
 ms.topic: reference
 keywords:

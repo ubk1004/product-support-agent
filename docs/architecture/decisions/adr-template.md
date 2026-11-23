@@ -1,7 +1,7 @@
 ---
 title: Architecture Decision Record Template
 description: Reusable template for documenting project architecture decisions
-author: Product Support Agent Team
+author: Udaybhanu Karmakar
 ms.date: 2026-11-21
 ms.topic: reference
 keywords:

@@ -1,7 +1,7 @@
 ---
 title: ADR-0003 Local-First Hosting Boundaries
 description: Proposed local MVP boundary and conceptual Azure deployment posture
-author: Product Support Agent Team
+author: Udaybhanu Karmakar
 ms.date: 2026-11-22
 ms.topic: decision
 keywords:

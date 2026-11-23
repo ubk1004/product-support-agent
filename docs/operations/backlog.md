@@ -1,7 +1,7 @@
 ---
 title: Operations Backlog
 description: Track outstanding repository governance and operational work
-author: Product Support Agent Team
+author: Udaybhanu Karmakar
 ms.date: 2026-11-21
 ms.topic: reference
 ---
