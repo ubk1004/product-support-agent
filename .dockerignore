@@ -1,0 +1,10 @@
+.env*
+.git
+.local
+**/.local
+.venv
+**/.venv
+**/node_modules
+**/.next
+**/__pycache__
+**/*.py[cod]

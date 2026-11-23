@@ -51,11 +51,7 @@ class Settings(BaseSettings):
 
 
 class ModelAndSearchSettings(BaseSettings):
-    """Foundry and Azure AI Search settings, using the variable names in `.env.example`.
-
-    `embedding_base_url` points at Foundry now and at the LiteLLM gateway later; the
-    embedding client only needs an OpenAI-compatible `/embeddings` endpoint.
-    """
+    """Foundry and Azure AI Search settings, using the variable names in `.env.example`."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
 
@@ -74,6 +70,9 @@ class ModelAndSearchSettings(BaseSettings):
     embedding_dimensions: int = Field(
         gt=0, validation_alias="PRODUCT_SUPPORT_SEARCH_EMBEDDING_DIMENSIONS"
     )
+    chat_base_url: str = Field(validation_alias="AZURE_OPENAI_ENDPOINT")
+    chat_api_key: SecretStr = Field(validation_alias="AZURE_OPENAI_API_KEY")
+    chat_deployment: str = Field(validation_alias="AZURE_OPENAI_CHAT_DEPLOYMENT")
     search_endpoint: str = Field(
         validation_alias=AliasChoices("PRODUCT_SUPPORT_SEARCH_ENDPOINT", "AZURE_AI_SEARCH_ENDPOINT")
     )

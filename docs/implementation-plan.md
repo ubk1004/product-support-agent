@@ -1,6 +1,6 @@
 ---
 title: Product Support Agent Implementation Plan
-description: Review-gated implementation plan for a local-first product-support AI agent with a conceptual, statically validated Azure design in Canada Central
+description: Demo delivery plan for a local-first product-support AI agent with a conceptual, statically validated Azure design in Canada Central
 author: Product Support Agent Team
 ms.date: 2026-11-22
 ms.topic: concept
@@ -12,7 +12,7 @@ keywords:
 estimated_reading_time: 12
 ---
 
-## Purpose and approval model
+## Purpose and delivery model
 
 This plan turns the requirements in [Instructions.md](../Instructions.md) into a staged, testable delivery path. Phases 0 to 3 are complete.
 
@@ -337,7 +337,14 @@ Accepted deferrals and where they are now handled:
 
 ### Phase 4: FastAPI and grounded agent orchestration
 
-**Status:** Ready to start. Demo delivery mode applies ([ADR-0007](./architecture/decisions/adr-0007-demo-delivery-mode.md)). No approval is needed to begin or to finish.
+**Status:** Complete (2026-11-22). Indexed the existing 300 canonical documents (952 chunks) into the demo index; the marked live Search test passed; three manual Foundry/Search questions returned grounded answers with retrieval-bound citations. The final live check returned HTTP 200 with three citations and logged token counts without query or response text. Targeted chat tests: 15 passed. Full checks passed: `uv run ruff format --check .`, `uv run ruff check .`, `uv run mypy src/product_support_agent scripts`, `uv run pytest` (310 passed, 1 deselected), `uv run bandit -q -r src scripts`, and in `apps/web`, `npm run lint`, `npm run typecheck`, `npm run build`.
+
+| Exit criterion | Result | Evidence |
+|---|---|---|
+| Live Search and Foundry chat return grounded answers with citations | Pass | Marked live Search test passed; three manual Foundry/Search questions returned retrieval-bound citations |
+| Fake-model tests cover validation, citation binding, no evidence, and provider errors | Pass | 15 targeted chat tests passed, including forged, unknown, and URL-injected IDs |
+| Retrieved prompt injection cannot author links or citations | Pass | Prompt-injection regression test passed with the injected link instruction |
+| Routine Python and web checks pass | Pass | Ruff format/check, mypy, pytest (310 passed, 1 deselected), Bandit, and web lint/typecheck/build passed |
 
 **Goal:** Answer product-support questions over the indexed documentation, using structured tool calling, with citations the model cannot forge.
 
@@ -354,7 +361,7 @@ Accepted deferrals and where they are now handled:
 1. **Index the demo corpus.** Run `uv run python scripts/run_source_ingestion.py`; it skips anything fetched in the last 24 hours. Then run `uv run python scripts/index_documents.py`. Record the index name and document count in [local development](./operations/local-development.md). This closes D3-1 and the indexing part of D3-2.
 2. **Live Search integration tests (closes D3-2).** Add `tests/integration/test_live_search.py`, marked `@pytest.mark.live` and skipped unless `-m live` is passed. Use a `product-support-test-*` index with 3 to 5 synthetic documents. Check upsert, the product-ID filter, hybrid query results, preserved `source_url` and IDs, stale-chunk removal on re-upload, and deletion. Delete the index at the end. Register the `live` marker in `pyproject.toml` and exclude it by default.
 3. **Retrieval service.** Add a function that takes a question and optional product IDs, embeds the question with `embed_query`, calls `search`, and returns `SearchResult` items. Only covered products are searchable.
-4. **Agent.** Use Microsoft Agent Framework for Python (see `.github/skills/microsoft-agent-framework`), pinned in `pyproject.toml`. Expose one tool, `search_documentation(query, product_ids?)`, that returns evidence items `{evidence_id, title, excerpt, product_id}`. The URL is not included. The system prompt says: answer only from evidence; cite evidence IDs as `[E1]`; say so when nothing relevant was found; never output URLs. Chat goes to the Foundry chat deployment (`AZURE_OPENAI_CHAT_DEPLOYMENT`; gpt-5 rejects `temperature`, so omit it when `CHAT_TEMPERATURE` is empty).
+4. **Agent.** Use Microsoft Agent Framework for Python (see `.github/skills/microsoft-agent-framework`), pinned in `pyproject.toml`. Expose one tool, `search_documentation(query, product_ids?)`, that returns evidence items `{evidence_id, title, excerpt, product_id}`. The URL is not included. The system prompt says: answer only from evidence; cite evidence IDs as `[E1]`; say so when nothing relevant was found; never output URLs. Chat goes to the Foundry chat deployment (`AZURE_OPENAI_CHAT_DEPLOYMENT`); never send `temperature` to gpt-5 or another reasoning deployment, regardless of the configured value.
 5. **Citation binding.** Post-process the answer server-side. Map each `[E#]` to the retrieved result's `source_url` and title, drop unknown IDs, and strip any URL the model produced. The response contains `answer`, `citations[]`, and `grounded: bool`.
 6. **API.** Add `POST /chat`, which takes `{message: str (1..2000 chars), product_ids?: list[str]}` and returns `{answer, citations, grounded, request_id}`. Add timeouts (30 seconds), at most 4 tool calls, and an in-process concurrency cap. No history is persisted.
 7. **Optional: LiteLLM gateway.** Add a `litellm` service to `compose.yaml` that points at the same Foundry deployments, and switch the base URLs to `http://127.0.0.1:4000/v1`. If time is short, record "direct Foundry for demo; LiteLLM is the production gateway" in the decision register and skip this.
@@ -370,7 +377,14 @@ Accepted deferrals and where they are now handled:
 
 ### Phase 5: Next.js chat interface
 
-**Status:** Starts when Phase 4's `POST /chat` exists. Demo delivery mode.
+**Status:** Complete (2026-11-22). Added the server-side Next.js chat route and accessible chat panel. The browser walkthrough confirmed 10 of 100 products indexed, citation links from retrieved evidence, the fixed no-evidence answer, the uncovered-product message, keyboard form submission, and visible keyboard focus. `npm run lint`, `npm run typecheck`, and `npm run build` in `apps/web` passed.
+
+| Exit criterion | Result | Evidence |
+|---|---|---|
+| Browser requests go through the Next.js server route | Pass | Server-side chat route calls FastAPI; the browser walkthrough returned a grounded answer |
+| Answer, citation, no-evidence, uncovered-product, and error states work | Pass | Manual walkthrough confirmed citation links, no-evidence answer, and uncovered-product message |
+| Keyboard, labels, live answer announcements, and visible focus are present | Pass | Keyboard form submission and visible keyboard focus confirmed in the walkthrough |
+| Web lint, typecheck, and build pass | Pass | `npm run lint`, `npm run typecheck`, and `npm run build` passed in `apps/web` |
 
 **Goal:** A usable chat page beside the existing coverage view.
 
@@ -388,7 +402,16 @@ Accepted deferrals and where they are now handled:
 
 ### Phase 6: Local integrated demo and evaluation
 
-**Status:** Starts after Phase 5. Demo delivery mode. This is the demo completion gate.
+**Status:** Complete (2026-11-22). `podman compose config --quiet` passed; API and web images built, the Compose services became healthy, and a browser question returned a grounded answer with a citation link. The evaluation reached 12/15 expected-source hits (80.0%), 28/28 citation URL matches (100%), and 3/3 refusals. Semantic ranking was not evaluated because Search tier and billing could not be verified; no service setting was changed. Updated the validation workflow so mypy and Bandit cover `scripts`. Final checks passed: `uv run ruff format --check .` (87 files already formatted), `uv run ruff check .`, `uv run mypy src/product_support_agent scripts` (29 source files, no issues), `uv run pytest` (310 passed, 1 deselected), `uv run bandit -q -r src scripts`, and in `apps/web`, `npm run lint`, `npm run typecheck`, and `npm run build`.
+
+| Exit criterion | Result | Evidence |
+|---|---|---|
+| One command starts a healthy, loopback-bound local stack | Pass | `podman compose config --quiet`; API and web images built; Compose health checks passed; browser chat returned a cited answer |
+| Evaluation meets all three demo targets | Pass | 12/15 expected-source hits (80.0%); 28/28 citation URL matches (100%); 3/3 unanswerable questions refused |
+| Semantic-ranker outcome is recorded without unverified service changes | Pass | Tier and billing could not be verified; report records not evaluated and no setting was changed |
+| Clean-checkout runbook documents setup, first ingestion/indexing, chat, evaluation, and data-preserving teardown | Pass | Updated [local development](./operations/local-development.md) and verified the documented Compose startup command |
+| Request metadata is logged without query or response text | Pass | Live chat check recorded request ID, latency, token counts, and outcome; query and response text were not logged |
+| CI validation covers Python scripts and all routine checks pass | Pass | Workflow mypy and Bandit steps include `scripts`; all Python and web checks listed above passed |
 
 **Goal:** One command brings the demo up locally. A small evaluation shows that it works.
 
@@ -396,7 +419,7 @@ Accepted deferrals and where they are now handled:
 
 1. **Containers.** Add `Containerfile`s for the API and web app, and add `api` and `web` services to `compose.yaml`, loopback-bound, with health checks. Add the LiteLLM service if Phase 4 step 7 was done. Ingestion stays a one-shot `podman compose run` job.
 2. **Evaluation set (closes D3-3 in demo form).** Add `tests/evaluation/questions-v1.json` with about 15 questions across the 10 covered products, each with the expected product ID and at least one expected `source_url`, plus 3 unanswerable questions. Add `scripts/run_evaluation.py`, which runs the questions through the API. It reports top-five retrieval hit rate (target ≥ 80% for the demo), citation validity (target 100% of citations resolve to retrieved evidence), and refusal on unanswerable questions (target 3 of 3). Write the results to `docs/operations/phase-6-evaluation-v1.md`.
-3. **Semantic reranking.** If the Search tier supports semantic ranker, run the evaluation with and without it and record the choice. Otherwise record "not available on this tier".
+3. **Semantic reranking.** Verify Search tier and billing before using semantic ranker. If availability cannot be verified without a service change or new spend, record that it was not evaluated and why; do not change service settings.
 4. **Runbook.** Update [local development](./operations/local-development.md) with prerequisites, `.env` keys, start order, ingest, index, chat, evaluation, and teardown.
 5. **Logging.** Add request ID, latency, token counts, and outcome to the logs, with no query or response text. OpenTelemetry export is optional.
 
@@ -436,6 +459,8 @@ Accepted deferrals and where they are now handled:
 Deploying the application stack to Azure and running a pilot requires the user. It needs a budget, a chosen APIM SKU, and the production-only items from Phases 4 to 7. The Phase 7 pipelines make it a `workflow_dispatch` away once approved.
 
 ### Phase 9: Production-readiness gap register (documentation only)
+
+**Status:** Complete (2026-11-22). Created the production gap register from ADR-0007, the Phase 4 to 7 Production-only notes, open threats, and architecture risks; linked it from the README and included owner roles and blocking triggers.
 
 **Goal:** One page that lists what separates the demo from production.
 

@@ -536,7 +536,7 @@ class AzureAISearchProvider:
 
         vector_query = VectorizedQuery(
             vector=vector,
-            k_nearest_neighbors=max(top, DEFAULT_SEARCH_TOP),
+            k_nearest_neighbors=max(top * 4, DEFAULT_SEARCH_TOP),
             fields=VECTOR_FIELD_NAME,
         )
         results = await self.client.search(

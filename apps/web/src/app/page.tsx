@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { connection } from "next/server";
+import { ChatPanel } from "@/components/ChatPanel";
 import {
   type CoverageReport,
   type CoverageStatus,
@@ -158,6 +159,8 @@ export default async function HomePage() {
           </p>
         )}
       </section>
+
+      <ChatPanel products={result.ok ? result.report.products : []} />
 
       {result.ok ? (
         <section className="coverage" aria-labelledby="coverage-title">

@@ -45,7 +45,7 @@ const STATUSES = new Set<CoverageStatus>([
   "no_public_source",
 ]);
 
-function apiBaseUrl(): string {
+export function apiBaseUrl(): string {
   const configured = process.env.PRODUCT_SUPPORT_API_BASE_URL?.trim();
   const base = configured || DEFAULT_API_BASE_URL;
   const url = new URL(base);

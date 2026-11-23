@@ -5,6 +5,13 @@ services:
       - "127.0.0.1:27017:27017"
     volumes:
       - mongodb_data:/data/db
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
 
   azurite:
     image: mcr.microsoft.com/azure-storage/azurite:3.35.0
@@ -22,6 +29,60 @@ services:
       - "127.0.0.1:10001:10001"
     volumes:
       - azurite_data:/data
+
+  api:
+    build:
+      context: .
+      dockerfile: Containerfile
+    env_file:
+      - .env
+    environment:
+      PRODUCT_SUPPORT_MONGODB_URI: mongodb://mongodb:27017
+      PRODUCT_SUPPORT_MANIFEST_PATH: /app/docs/operations/phase-2-product-manifest-v1.json
+      PRODUCT_SUPPORT_SOURCE_MAP_PATH: /app/docs/operations/phase-3-source-map-v1.json
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "__import__('urllib.request').request.urlopen('http://127.0.0.1:8000/healthz',timeout=2).read()",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Containerfile
+    environment:
+      PRODUCT_SUPPORT_API_BASE_URL: http://api:8000
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
 
 volumes:
   mongodb_data:

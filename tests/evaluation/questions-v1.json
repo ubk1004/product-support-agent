@@ -1,0 +1,161 @@
+{
+  "version": "phase-6-v1",
+  "questions": [
+    {
+      "id": "q-1146-01",
+      "product_id": "1146",
+      "question": "What information does ArcSight Management Center's end-of-support announcement provide?",
+      "expected_source_urls": [
+        "https://docs.microfocus.com/doc/2302/26.2/a3492cd4a971_cth_deprecated"
+      ],
+      "answerable": true
+    },
+    {
+      "id": "q-1146-02",
+      "product_id": "1146",
+      "question": "Which known issues are listed for ArcSight Management Center?",
+      "expected_source_urls": [
+        "https://docs.microfocus.com/doc/2302/26.2/a3492cd4a971_openissues"
+      ],
+      "answerable": true
+    },
+    {
+      "id": "q-1167-01",
+      "product_id": "1167",
+      "question": "How can printers be migrated from an Active Directory environment with iPrint?",
+      "expected_source_urls": [
+        "https://docs.microfocus.com/doc/27/26.4/iprint_admin_ad_migrate_iprint"
+      ],
+      "answerable": true
+    },
+    {
+      "id": "q-1167-02",
+      "product_id": "1167",
+      "question": "Which platforms are listed in the iPrint Appliance support matrix?",
+      "expected_source_urls": [
+        "https://docs.microfocus.com/doc/27/26.4/iprint_admin_akf0nmi"
+      ],
+      "answerable": true
+    },
+    {
+      "id": "q-1176-01",
+      "product_id": "1176",
+      "question": "How does Change Guardian document upgrading the appliance?",
+      "expected_source_urls": [
+        "https://docs.microfocus.com/doc/21/6.3.3/aboutapplianceupgrade"
+      ],
+      "answerable": true
+    },
+    {
+      "id": "q-1176-02",
+      "product_id": "1176",
+      "question": "What administrative tasks are described for Change Guardian?",
+      "expected_source_urls": [
+        "https://docs.microfocus.com/doc/21/6.3.3/administer"
+      ],
+      "answerable": true
+    },
+    {
+      "id": "q-1184-01",
+      "product_id": "1184",
+      "question": "How do you change the load generator TEMP folder in LoadRunner Enterprise?",
+      "expected_source_urls": [
+        "https://admhelp.microfocus.com/lre/en/26.1-26.3/online_help/Content/PC_IG/Change-Load-Generator-TEMP-file.htm"
+      ],
+      "answerable": true
+    },
+    {
+      "id": "q-1184-02",
+      "product_id": "1184",
+      "question": "How is TLS/SSL configured for LoadRunner Enterprise components?",
+      "expected_source_urls": [
+        "https://admhelp.microfocus.com/lre/en/26.1-26.3/online_help/Content/PC_IG/Configuring_SSL_for_LR.htm"
+      ],
+      "answerable": true
+    },
+    {
+      "id": "q-1185-01",
+      "product_id": "1185",
+      "question": "What are the documented prerequisites for installing LoadRunner Professional?",
+      "expected_source_urls": [
+        "https://admhelp.microfocus.com/lr/en/26.1-26.3/help/WebHelp/Content/Install/About-install.htm"
+      ],
+      "answerable": true
+    },
+    {
+      "id": "q-1185-02",
+      "product_id": "1185",
+      "question": "What steps install the Data Hub and Web Connector for LoadRunner Professional?",
+      "expected_source_urls": [
+        "https://admhelp.microfocus.com/lr/en/26.1-26.3/help/WebHelp/Content/Install/Data-Hub-install-process.htm"
+      ],
+      "answerable": true
+    },
+    {
+      "id": "q-1204-01",
+      "product_id": "1204",
+      "question": "What does the GroupWise Disaster Recovery release notes page cover?",
+      "expected_source_urls": [
+        "https://docs.microfocus.com/doc/2649/24.4/gwdr24_4_release_notes"
+      ],
+      "answerable": true
+    },
+    {
+      "id": "q-1220-01",
+      "product_id": "1220",
+      "question": "What are the system requirements for AutoPass License Server?",
+      "expected_source_urls": [
+        "https://docs.microfocus.com/doc/135/26.4/beforeyouinstall"
+      ],
+      "answerable": true
+    },
+    {
+      "id": "q-1268-01",
+      "product_id": "1268",
+      "question": "What settings are described on the Database Activity Monitoring configuration page?",
+      "expected_source_urls": [
+        "https://docs.microfocus.com/doc/2099/26.1/a270dbf2e430_configuration"
+      ],
+      "answerable": true
+    },
+    {
+      "id": "q-22-01",
+      "product_id": "22",
+      "question": "What advanced administration tasks are documented for ValueEdge?",
+      "expected_source_urls": [
+        "https://admhelp.microfocus.com/valueedge/en/latest/Online/Content/AdminGuide/advanced-admin-tasks.htm"
+      ],
+      "answerable": true
+    },
+    {
+      "id": "q-32-01",
+      "product_id": "32",
+      "question": "What does the Content Manager release notes page describe?",
+      "expected_source_urls": [
+        "https://docs.microfocus.com/doc/544/26.4/a4c5aea3b233_overviewcontentmanager"
+      ],
+      "answerable": true
+    },
+    {
+      "id": "u-01",
+      "product_id": "1146",
+      "question": "What is the weather forecast in Paris tomorrow?",
+      "expected_source_urls": [],
+      "answerable": false
+    },
+    {
+      "id": "u-02",
+      "product_id": "1167",
+      "question": "How many moons orbit Saturn?",
+      "expected_source_urls": [],
+      "answerable": false
+    },
+    {
+      "id": "u-03",
+      "product_id": "1185",
+      "question": "What was the global price of Bitcoin yesterday?",
+      "expected_source_urls": [],
+      "answerable": false
+    }
+  ]
+}

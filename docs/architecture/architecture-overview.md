@@ -22,11 +22,11 @@ Each diagram marks components as **implemented** (code and tests exist) or
 |---|---|
 | Catalog discovery, manifest, queue contract, Phase 2 worker | Implemented (Phase 2, approved) |
 | Source map, periodic source worker, fetch state, coverage API and UI | Implemented, tested offline ([ADR-0006](decisions/adr-0006-periodic-resumable-source-ingestion.md)) |
-| Canonical documents and chunks in MongoDB | Implemented; no live content ingested |
-| Azure AI Search index, hybrid retrieval provider | Implemented; test-index definition applied, no documents uploaded |
-| Embeddings through LiteLLM | Interface only; no deployment configured |
-| Agent, chat API, citations, chat UI | Planned (Phases 4 and 5) |
-| Telemetry, evaluation, query/response retention | Planned and gated (Phase 6, privacy approval) |
+| Canonical documents and chunks in MongoDB | Implemented; 300 pages ingested for 10 products |
+| Azure AI Search index, hybrid retrieval provider | Implemented; 952 chunks indexed in the demo index |
+| Embeddings and chat | Implemented through the user's Foundry OpenAI-compatible endpoint |
+| Agent, chat API, citations, chat UI | Implemented (Phases 4 and 5); citations resolve from retrieved evidence |
+| Metadata-only logs and evaluation | Implemented (Phase 6); query/response retention remains off |
 | Azure deployment | Design-only (Phase 7) |
 
 Legend: solid lines and boxes are implemented; dashed lines or boxes marked
@@ -50,15 +50,15 @@ flowchart LR
     Search[(Azure AI Search<br/>user-provided)]
     Foundry[(Microsoft Foundry<br/>user-provided)]
 
-    User -->|"Views coverage, asks questions (planned)"| UI
+    User -->|"Views coverage, asks questions"| UI
     UI --> API
     Operator -->|Weekly schedule or manual run| Ingest
     API -.->|One-time manifest creation| Catalog
     Ingest -->|Anonymous, allowlisted, robots-checked GET| Docs
-    Ingest -.->|Chunks and vectors, planned| Search
-    API -.->|Hybrid retrieval, planned| Search
-    API -.->|Chat via LiteLLM, planned| Foundry
-    Ingest -.->|Embeddings via LiteLLM, planned| Foundry
+    Ingest -->|Chunks and vectors| Search
+    API -->|Hybrid retrieval| Search
+    API -->|Chat via OpenAI-compatible endpoint| Foundry
+    Ingest -->|Embeddings via OpenAI-compatible endpoint| Foundry
 ```
 
 The OpenText product pages are a catalog source only. They render in the
@@ -73,7 +73,7 @@ flowchart TB
     subgraph Local["Local Podman environment, loopback-bound"]
         subgraph Web["apps/web: Next.js"]
             Page["Home page, server component<br/>coverage summary and table"]
-            ChatUI["Chat view, planned"]
+            ChatUI["Accessible chat view"]
         end
 
         subgraph Backend["src/product_support_agent: FastAPI"]
@@ -81,7 +81,7 @@ flowchart TB
             ManifestAPI["GET /catalog/manifest"]
             CoverageAPI["GET /catalog/coverage"]
             RunsAPI["GET /ingestion/runs/run_id"]
-            Agent["Agent and retrieval tool, planned"]
+            Agent["Agent and retrieval tool"]
         end
 
         subgraph Jobs["Ingestion"]
@@ -93,14 +93,14 @@ flowchart TB
 
         Azurite[(Azurite queue<br/>product-ingestion and poison)]
         Mongo[(MongoDB)]
-        LiteLLM["LiteLLM gateway, planned"]
+        FoundryClient["OpenAI-compatible Foundry client"]
     end
 
     Files[["Versioned files in docs/operations:<br/>manifest and source map"]]
     Search[(Azure AI Search)]
 
     Page -->|Server-side fetch| CoverageAPI
-    ChatUI -.-> Agent
+    ChatUI --> Agent
     CoverageAPI --> Files
     CoverageAPI -->|Read fetch state| Mongo
     CatalogSvc --> Files
@@ -109,10 +109,10 @@ flowchart TB
     Runner --> SourceWorker
     SourceWorker --> Files
     SourceWorker -->|Fetch state, lease, canonical documents| Mongo
-    SourceWorker -.->|DocumentIndexingService| LiteLLM
-    SourceWorker -.-> Search
-    Agent -.-> Search
-    Agent -.-> LiteLLM
+    SourceWorker -->|DocumentIndexingService| FoundryClient
+    SourceWorker --> Search
+    Agent --> Search
+    Agent --> FoundryClient
 ```
 
 The browser talks only to Next.js. The home page fetches `/catalog/coverage` on
@@ -245,30 +245,30 @@ Product statuses are `indexed`, `pending` (approved source, nothing indexed
 yet), `unavailable` (the seed or the product is backing off), `excluded`
 (disabled in the source map), and `no_public_source`.
 
-## Planned grounded chat flow
+## Grounded chat flow
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor User
-    participant UI as Next.js chat, planned
-    participant API as FastAPI chat, planned
-    participant Agent as Agent Framework, planned
+    participant UI as Next.js chat
+    participant API as FastAPI chat
+    participant Agent as Agent Framework
     participant Search as Azure AI Search
-    participant GW as LiteLLM to Foundry
+    participant Foundry as Foundry OpenAI-compatible endpoint
 
     User->>UI: Question
     UI->>API: Validated request, no history stored
     API->>Agent: Question and covered product IDs
-    Agent->>GW: Tool-calling chat request
-    GW-->>Agent: Call retrieval tool
+    Agent->>Foundry: Tool-calling chat request
+    Foundry-->>Agent: Call retrieval tool
     Agent->>Search: Hybrid query, product filter
     Search-->>Agent: Chunks with evidence ID and source URL
-    Agent->>GW: Answer using evidence IDs only
-    GW-->>Agent: Draft answer
+    Agent->>Foundry: Answer using evidence IDs only
+    Foundry-->>Agent: Draft answer
     Agent-->>API: Answer and cited evidence IDs
     API->>API: Resolve IDs to stored URLs, reject unknown IDs
-    API-->>UI: Answer with server-rendered citations
+    API-->>UI: Answer with evidence-bound citations
 ```
 
 Retrieved text is untrusted data. The model may cite only evidence IDs; the
@@ -284,7 +284,7 @@ erDiagram
     PRODUCT_SOURCE ||--o{ FETCH_STATE : "seed, product, page"
     FETCH_STATE }o--o| CANONICAL_DOCUMENT : "document_id"
     CANONICAL_DOCUMENT ||--o{ CANONICAL_CHUNK : "split into"
-    CANONICAL_CHUNK ||--o| SEARCH_CHUNK : "derived, planned"
+    CANONICAL_CHUNK ||--o| SEARCH_CHUNK : "derived, indexed"
 
     MANIFEST {
         string manifest_version
@@ -341,11 +341,10 @@ flowchart LR
     subgraph Local["Local application, loopback-bound"]
         UI[Next.js]
         API[FastAPI]
-        Agent["Agent, planned"]
+        Agent["Agent"]
         Worker[Source and queue workers]
         Mongo[(MongoDB)]
         Queue[(Azurite)]
-        Gateway["LiteLLM, planned"]
         Retention[("Retention collection, off by default")]
     end
 
@@ -364,16 +363,15 @@ flowchart LR
 
     Browser -->|"TB-01: HTML only, no history"| UI
     UI -->|"TB-02: server-side fetch"| API
-    API -.-> Agent
-    Agent -.->|"TB-03: prompts and evidence"| Gateway
-    Gateway -.-> Foundry
+    API --> Agent
+    Agent -->|"TB-03: prompts and evidence"| Foundry
     Worker -->|"TB-04: allowlist, robots, no redirects, limits"| Docs
     API -.->|"TB-04: one-time manifest"| Catalog
     Worker -->|"TB-05: state, documents, references"| Mongo
     Worker --> Queue
     API -->|"TB-05: read fetch state"| Mongo
-    Worker -.->|"TB-06: chunks and vectors"| Search
-    Agent -.->|"TB-06: hybrid queries"| Search
+    Worker -->|"TB-06: chunks and vectors"| Search
+    Agent -->|"TB-06: hybrid queries"| Search
     API -.->|"TB-07: content-free events"| Telemetry
     API -.->|"Only after privacy approval and opt-in"| Retention
     DevCreds -.->|"TB-08"| Search
@@ -391,12 +389,11 @@ flowchart TB
             Mongo[(MongoDB 8)]
             Azurite[(Azurite)]
         end
-        subgraph Processes["Host processes today; containerized in Phase 6"]
+        subgraph Processes["Podman Compose services"]
             NextJS["Next.js on 127.0.0.1:3000"]
             FastAPI["FastAPI on 127.0.0.1:8000"]
-            Job["Source ingestion job<br/>weekly task"]
+            Job["Source ingestion job<br/>one-shot command"]
         end
-        LiteLLM["LiteLLM, planned"]
     end
     Search[(User-provided Azure AI Search)]
     Foundry[(User-provided Foundry)]
@@ -406,9 +403,8 @@ flowchart TB
     FastAPI --> Mongo
     Job --> Mongo
     Job --> Docs
-    Job -.-> Search
-    FastAPI -.-> Search
-    LiteLLM -.-> Foundry
+    Job --> Search
+    FastAPI --> Search
 
     subgraph Cloud["Conceptual Azure design, not deployed"]
         APIM[APIM]
@@ -435,7 +431,7 @@ later-approved activity described in Phase 7 of the
 | FastAPI and agent | Container App | Cloud identity and APIM behavior require Phase 7 validation. |
 | Source ingestion job, weekly task | Container Apps job on a cron schedule | Egress must be allowlisted; the MongoDB lease keeps runs single-instance. |
 | Catalog process and queue worker | Container App with queue-based scaling | Used for manifest creation; not needed for weekly documentation refresh. |
-| LiteLLM | Azure API Management | Not assumed to be behaviorally equivalent; needs an ADR. |
+| Direct Foundry OpenAI-compatible calls | Azure API Management | LiteLLM is optional for the demo; gateway policy and managed identity are production work. |
 | MongoDB | Cosmos DB for MongoDB | Authentication, `tz_aware` datetimes, and atomic upserts for the lease must be verified. |
 | Azurite Queue | Azure Storage Queue | Poison-message and completion tracking need application-level handling. |
 | Azure AI Search | Azure AI Search | Same provider. Local access uses the public endpoint; the cloud design uses a private endpoint. |

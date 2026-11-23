@@ -1,15 +1,25 @@
 import asyncio
 import logging
-from collections.abc import Callable
+import time
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from pydantic import ValidationError
 from pymongo.errors import PyMongoError
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
 
 from product_support_agent.catalog import CatalogClient
+from product_support_agent.chat import (
+    ChatModelUnavailable,
+    ChatService,
+    SearchUnavailable,
+    UncoveredProductError,
+    build_chat_service,
+)
 from product_support_agent.config import Settings
 from product_support_agent.coverage import CoverageReport, build_coverage_report, load_manifest
 from product_support_agent.fetch_state import FetchStateRecord, MongoFetchStateStore
@@ -23,7 +33,20 @@ from product_support_agent.store import InMemoryIngestionStore
 configure_redacted_logging()
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Product Support Agent")
+CHAT_TIMEOUT_SECONDS = 30.0
+MAX_CONCURRENT_CHAT_REQUESTS = 4
+_chat_concurrency = asyncio.Semaphore(MAX_CONCURRENT_CHAT_REQUESTS)
+_chat_service: ChatService | None = None
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    yield
+    if _chat_service is not None:
+        await _chat_service.close()
+
+
+app = FastAPI(title="Product Support Agent", lifespan=lifespan)
 
 settings = Settings()
 _phase_two_store = InMemoryIngestionStore()
@@ -115,4 +138,74 @@ async def catalog_coverage() -> CoverageReport:
         logger.warning("coverage inputs unavailable: %s", type(error).__name__)
         raise HTTPException(status_code=503, detail="coverage data unavailable") from error
     records = await asyncio.to_thread(fetch_state_reader)
-    return build_coverage_report(manifest, source_map, records)
+    return build_coverage_report(manifest, source_map, records, retrieval_enabled=True)
+
+
+def get_chat_service() -> ChatService:
+    global _chat_service
+    if _chat_service is None:
+        _chat_service = build_chat_service(settings)
+    return _chat_service
+
+
+@app.post("/chat", tags=["chat"])
+async def chat(payload: dict[str, object]) -> dict[str, object]:
+    from product_support_agent.chat import ChatRequest
+
+    try:
+        chat_request = ChatRequest.model_validate(payload)
+    except ValidationError as error:
+        raise HTTPException(status_code=422, detail="invalid chat request") from error
+
+    started_at = time.perf_counter()
+    request_id = request_id_context.get()
+    try:
+        async with _chat_concurrency:
+            service = get_chat_service()
+            execution = await asyncio.wait_for(
+                service.answer(chat_request.message, chat_request.product_ids),
+                timeout=CHAT_TIMEOUT_SECONDS,
+            )
+    except UncoveredProductError as error:
+        logger.info(
+            "chat completed outcome=uncovered_product latency_ms=%d",
+            round((time.perf_counter() - started_at) * 1000),
+        )
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "uncovered_product"},
+        ) from error
+    except SearchUnavailable as error:
+        logger.warning(
+            "chat completed outcome=search_unavailable latency_ms=%d",
+            round((time.perf_counter() - started_at) * 1000),
+        )
+        raise HTTPException(status_code=503, detail="search service unavailable") from error
+    except ChatModelUnavailable as error:
+        logger.warning(
+            "chat completed outcome=model_unavailable latency_ms=%d",
+            round((time.perf_counter() - started_at) * 1000),
+        )
+        raise HTTPException(status_code=502, detail="chat model unavailable") from error
+    except TimeoutError as error:
+        logger.warning(
+            "chat completed outcome=timeout latency_ms=%d",
+            round((time.perf_counter() - started_at) * 1000),
+        )
+        raise HTTPException(status_code=504, detail="chat request timed out") from error
+    except ValidationError as error:
+        logger.error(
+            "chat completed outcome=configuration_error latency_ms=%d",
+            round((time.perf_counter() - started_at) * 1000),
+        )
+        raise HTTPException(status_code=503, detail="chat service unavailable") from error
+
+    logger.info(
+        "chat completed outcome=%s latency_ms=%d input_tokens=%s output_tokens=%s",
+        "grounded" if execution.response.grounded else "no_evidence",
+        round((time.perf_counter() - started_at) * 1000),
+        execution.input_tokens,
+        execution.output_tokens,
+    )
+    response = execution.response.model_copy(update={"request_id": request_id})
+    return response.model_dump(mode="json")
