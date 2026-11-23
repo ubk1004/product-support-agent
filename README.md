@@ -247,7 +247,7 @@ product-support-agent/
 │   ├── prompts/                # Review and threat-model prompts
 │   ├── skills/
 │   │   └── microsoft-agent-framework/ # Agent Framework project guidance
-│   └── workflows/              # GitHub Actions validation workflow
+│   └── workflows/              # Validation, infrastructure, and app workflows
 ├── apps/
 │   └── web/                    # Next.js app, package lock, and build configuration
 │       └── src/
@@ -277,10 +277,11 @@ product-support-agent/
 └── uv.lock                     # Locked Python dependency graph
 ```
 
-There is currently no `infra/` directory or deployed Azure application stack.
-The Azure architecture and future infrastructure work are documented in the
-[implementation plan](docs/implementation-plan.md) and
-[architecture overview](docs/architecture/architecture-overview.md).
+The Azure architecture is authored as design-only Bicep in [infra/](infra/README.md);
+it has not been deployed. See the [IaC workflow](.github/workflows/infra.yml),
+[application workflow](.github/workflows/app.yml), and
+[infrastructure diagram](docs/architecture/diagrams/azure-infrastructure.drawio.svg)
+alongside the [architecture overview](docs/architecture/architecture-overview.md).
 
 ## Architecture and data flow
 
