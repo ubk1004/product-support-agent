@@ -1,7 +1,7 @@
 ---
 title: Local Development Runbook
 description: Run the product support demo locally with Podman Compose
-author: Product Support Agent Team
+author: Udaybhanu Karmakar
 ms.date: 2026-11-22
 ms.topic: how-to
 keywords:

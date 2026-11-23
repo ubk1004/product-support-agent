@@ -1,7 +1,7 @@
 ---
 title: ADR-0007 Demo Delivery Mode
 description: Lighter governance for the working local demo, with production-only controls recorded rather than performed
-author: Product Support Agent Team
+author: Udaybhanu Karmakar
 ms.date: 2026-11-22
 ms.topic: decision
 keywords:

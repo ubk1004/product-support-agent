@@ -1,7 +1,7 @@
 ---
 title: Product Support Agent Privacy Impact Assessment
 description: Draft privacy assessment for optional query and response retention in the local demo
-author: Product Support Agent Team
+author: Udaybhanu Karmakar
 ms.date: 2026-11-21
 ms.topic: reference
 keywords:

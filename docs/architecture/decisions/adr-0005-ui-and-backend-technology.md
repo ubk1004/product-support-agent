@@ -1,7 +1,7 @@
 ---
 title: ADR-0005 User Interface and Backend Technology
 description: Records the approved React and Next.js frontend and Python backend choices
-author: Product Support Agent Team
+author: Udaybhanu Karmakar
 ms.date: 2026-11-22
 ms.topic: decision
 keywords:

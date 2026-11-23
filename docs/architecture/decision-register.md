@@ -1,7 +1,7 @@
 ---
 title: Phase 0 Architecture Decision Register
 description: Proposed decisions and unresolved approvals for the product support agent MVP
-author: Product Support Agent Team
+author: Udaybhanu Karmakar
 ms.date: 2026-11-22
 ms.topic: reference
 keywords:
@@ -59,7 +59,7 @@ reviewer access, notice, redaction, TTL, and deletion are verified.
 | Accessibility | Target WCAG 2.2 AA, with automated checks plus manual keyboard and screen-reader review before Phase 5 closes. | Approved for planning |
 | Caching | No response cache in the MVP. Revisit only if baseline measurements show a need and cache data, TTL, and invalidation are approved. Durable source fetch state, conditional GETs, and a 24-hour freshness window are ingestion idempotency controls, not a response cache. | Approved for planning; fetch-state design proposed in ADR-0006 |
 | Periodic ingestion | Run the source indexer on a schedule, for example weekly. Durable per-URL state skips successes from the last 24 hours and unchanged revisions, uses conditional GETs, backs off failures (30 days permanent; 1–7 days transient), fails a product fast after three consecutive page failures, and abandons a host on rate limiting or an unavailable `robots.txt`. A MongoDB lease prevents overlapping runs. | Approved with Phase 3 on 2026-11-22 ([ADR-0006](decisions/adr-0006-periodic-resumable-source-ingestion.md)). First live run completed on 2026-11-22 with 0 failures. The source-terms legal review is production-only (ADR-0007) |
-| Azure deployment | Keep the application stack conceptual and statically validated only. Do not deploy APIM, AI Search, Cosmos DB, Container Apps, or application workloads. Review the separately deployable network slice only in Phase 7. | Approved for planning |
+| Azure deployment | Keep the application stack design-only; do not deploy APIM, AI Search, Cosmos DB, Container Apps, or application workloads. | Phase 7 Bicep and CI/CD definitions authored and statically validated; no resources or workloads deployed |
 
 ## Source verification
 

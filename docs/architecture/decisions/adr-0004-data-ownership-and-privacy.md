@@ -1,7 +1,7 @@
 ---
 title: ADR-0004 Data Ownership and Privacy
 description: Proposed data ownership and telemetry minimization policy for the MVP
-author: Product Support Agent Team
+author: Udaybhanu Karmakar
 ms.date: 2026-11-22
 ms.topic: decision
 keywords:

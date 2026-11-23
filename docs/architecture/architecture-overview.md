@@ -1,7 +1,7 @@
 ---
 title: Product Support Agent Architecture Overview
 description: Current and planned architecture, process flows, data ownership, and trust boundaries for the local-first product support demo
-author: Product Support Agent Team
+author: Udaybhanu Karmakar
 ms.date: 2026-11-22
 ms.topic: concept
 keywords:
@@ -384,7 +384,7 @@ application boundary, is design-only and is shown in the deployment view.
 
 ```mermaid
 flowchart TB
-    subgraph Dev["Developer machine"]
+    subgraph Dev["Developer machine: local demo"]
         subgraph Podman["Podman compose, implemented"]
             Mongo[(MongoDB 8)]
             Azurite[(Azurite)]
@@ -395,8 +395,8 @@ flowchart TB
             Job["Source ingestion job<br/>one-shot command"]
         end
     end
-    Search[(User-provided Azure AI Search)]
-    Foundry[(User-provided Foundry)]
+    Search[(User-provided Azure AI Search<br/>public endpoint)]
+    Foundry[(User-provided Microsoft Foundry<br/>public endpoint)]
     Docs[(Public documentation hosts)]
 
     NextJS --> FastAPI
@@ -405,38 +405,34 @@ flowchart TB
     Job --> Docs
     Job --> Search
     FastAPI --> Search
-
-    subgraph Cloud["Conceptual Azure design, not deployed"]
-        APIM[APIM]
-        ACA["Container Apps: UI, API, scheduled ingestion job"]
-        Data[Cosmos DB for MongoDB, Storage queue, AI Search]
-        Egress[NAT Gateway egress with allowlist]
-        Obs[Azure Monitor]
-        APIM --> ACA
-        ACA --> Data
-        ACA --> Egress
-        ACA --> Obs
-    end
+    FastAPI --> Foundry
+    Job --> Foundry
 ```
 
-The application stack is not deployed to Azure. A network slice is a distinct,
-later-approved activity described in Phase 7 of the
-[implementation plan](../implementation-plan.md).
+![Azure infrastructure, designed in Bicep, not deployed](diagrams/azure-infrastructure.drawio.svg)
+
+The cloud design separates Container Apps and private endpoints into dedicated
+VNet subnets; the Container Apps subnet uses NAT for public Foundry and
+documentation egress, while data services resolve through private DNS.
+
+The Mermaid view above remains the implemented local demo and its current
+public service dependencies; the adjacent cloud diagram is a separate
+design-only target, not a deployed network slice.
 
 ## Local-to-cloud component mapping
 
 | Local MVP | Conceptual Azure counterpart | Important difference or limit |
 |---|---|---|
-| Next.js UI | Container App | Application deployment is deferred; cloud user authentication is not yet decided. |
-| FastAPI and agent | Container App | Cloud identity and APIM behavior require Phase 7 validation. |
-| Source ingestion job, weekly task | Container Apps job on a cron schedule | Egress must be allowlisted; the MongoDB lease keeps runs single-instance. |
-| Catalog process and queue worker | Container App with queue-based scaling | Used for manifest creation; not needed for weekly documentation refresh. |
-| Direct Foundry OpenAI-compatible calls | Azure API Management | LiteLLM is optional for the demo; gateway policy and managed identity are production work. |
-| MongoDB | Cosmos DB for MongoDB | Authentication, `tz_aware` datetimes, and atomic upserts for the lease must be verified. |
-| Azurite Queue | Azure Storage Queue | Poison-message and completion tracking need application-level handling. |
-| Azure AI Search | Azure AI Search | Same provider. Local access uses the public endpoint; the cloud design uses a private endpoint. |
+| Next.js UI | Container Apps `web` | External ingress; application deployment is deferred and the Bicep is not deployed. |
+| FastAPI and agent | Container Apps `api` | Internal ingress; Bicep defines managed identities and Key Vault references, but cloud runtime behavior is unverified. |
+| Source ingestion job, weekly task | Container Apps Job on a weekly cron schedule | Bicep routes public egress through NAT and defines private data endpoints; the job is not deployed. |
+| Catalog process and queue worker | Azure Storage Queue | The queue and private endpoint are defined; a cloud queue worker is not part of Phase 7. |
+| Direct Foundry OpenAI-compatible calls | Public Microsoft Foundry endpoint; optional APIM module | Endpoint and deployment names are Bicep parameters; `deployApim` defaults to false. |
+| MongoDB | Cosmos DB for MongoDB with a private endpoint | Bicep defines the service and private DNS; authentication, `tz_aware` datetimes, and atomic lease upserts remain unverified. |
+| Azurite Queue | Azure Storage Queue with a private endpoint | Poison-message and completion tracking need application-level handling. |
+| Azure AI Search | Azure AI Search with a private endpoint | Same provider. Local access uses the public endpoint; the Bicep design uses a private endpoint. |
 | No response cache | Azure Cache for Redis only if justified | Source fetch state is an idempotency control, not a cache. |
-| Collector not selected | Azure Monitor and Log Analytics | Query and response content is excluded until privacy approval. |
+| Collector not selected | Log Analytics and Application Insights | Container Apps logs target Log Analytics; application instrumentation and cloud validation are not included. |
 
 ## References
 

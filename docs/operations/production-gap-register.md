@@ -1,7 +1,7 @@
 ---
 title: Production Readiness Gap Register
 description: Known controls and decisions deferred beyond the local demo
-author: Product Support Agent Team
+author: Udaybhanu Karmakar
 ms.date: 2026-11-22
 ms.topic: reference
 keywords:
@@ -37,6 +37,7 @@ Phase 4 to 7 **Production-only** notes in the
 | Observability and service objectives | Operations and security owners | Production launch or a support commitment | Logs carry request IDs, latency, token counts, and outcomes without query/response text. Define latency/cost SLOs, alerting, trace controls, and Azure Monitor export. |
 | Usability and accessibility (R-08) | Product and accessibility owners | Public or customer-facing release | The demo has labels, keyboard operation, visible focus, `aria-live`, and a self-walkthrough. Conduct moderated usability and full WCAG 2.2 AA keyboard and screen-reader review. |
 | Supply-chain assurance (T-13) | Build and release owner | Publishing images or production deployment | Dependencies are locked and CI checks run; local container images build successfully. Add image scanning, SBOM/provenance, signing, protected release environments, and required branch checks. |
+| IaC and CI/CD production gates | Cloud platform and security owners | Production deployment or protected release | Static build and lint validate authoring only. Add PSRule or Checkov, CIDR-overlap and DNS-pairing checks, a detailed cost estimate, APIM SKU selection, and branch protection with required reviewers before deployment. |
 | Backup, restore, and incident operations | Data and operations owners | Production launch or any non-recoverable data | MongoDB data is local and no snapshot/restore procedure, on-call rotation, or incident-response process is defined. Establish and test them before production use. |
 | Product and source coverage (R-11) | Product owner / ingestion lead | A broader product-support claim or a new source host/product | Only 10 of the 100 manifest products have approved sources. Keep the coverage disclosure; review new products or hosts before adding them. |
 | Azure application deployment | Cloud platform owner | Any Azure application workload or new Azure resource | The demo stack is local. Azure deployment, resource creation other than approved Search indexes, and new spend require separate user authorization. |

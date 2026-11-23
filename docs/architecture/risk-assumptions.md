@@ -1,7 +1,7 @@
 ---
 title: Product Support Agent Risks and Assumptions
 description: Phase 0 risk and assumption register for the local-first product support demo
-author: Product Support Agent Team
+author: Udaybhanu Karmakar
 ms.date: 2026-11-22
 ms.topic: reference
 keywords:
@@ -28,7 +28,7 @@ qualitative and require review.
 | R-04 | The user requests query/response retention for demo review, but notice, access, redaction, retention, and deletion rules are not approved. | High | Add global and per-session off controls, default retention off, and do not retain real content until the Phase 0b privacy policy is approved. | Privacy owner, TBD | 0b, 6 |
 | R-05 | Local access to Azure AI Search and Foundry depends on user-supplied service configuration, network access, quota, and authentication. | Medium | Keep unit/integration tests deterministic; document connectivity and quota prerequisites for the local demo. | Demo operator, TBD | 1, 6 |
 | R-06 | The model may repeat injected source instructions, invent citations, or render unsafe source links. | High | Treat source text as untrusted; render only server-resolved URLs from retrieved evidence; test injection and rendering paths. | Agent lead | 0b, 4, 5 |
-| R-07 | The conceptual cloud network and identity design may not match current regional SKU, quota, or service constraints. | Medium | Validate against current Microsoft documentation and subscription facts in Phase 7; do not deploy the application stack. | Cloud architect, TBD | 7 |
+| R-07 | The designed cloud network and identity may not match current regional SKU, quota, or service constraints. | Medium | Bicep build and lint pass; the subscription what-if was blocked by an expired token, so validate live service constraints with an authorized session before deployment. | Cloud architect, TBD | 7 |
 | R-09 | Documentation source terms are unverified. The `www.microfocus.com/legal` page returned 403 to automated access, and public access does not establish reuse rights. | High | Review the terms manually and record the result before the first ingestion run; until then, run only `--discover-only` or offline tests. | Product owner | 3 |
 | R-10 | A scheduled indexer could repeat requests after a crash, overlap with another run, or keep hitting failing sources. | Medium | Durable per-URL fetch state, a 24-hour freshness window, conditional GETs, classified backoff, product fail-fast, host abort on 429, a request budget, and a single-runner lease (ADR-0006). | Ingestion lead | 3 |
 | R-11 | The curated source map covers 10 of 100 manifest products and is biased toward the former Micro Focus documentation portals. | Medium | The home page coverage view discloses indexed products first and labels the rest as not covered; no content is invented. | Product owner | 3, 5 |
@@ -42,7 +42,7 @@ qualitative and require review.
 | A-02 | The local demo uses the user's Azure AI Search and Foundry deployments; no local model or vector store is introduced. | Confirm endpoint/deployment configuration and Entra ID or key-based auth in Phase 0. |
 | A-03 | The demo catalog uses a random, stable manifest with a parameterized hard maximum of 100 products. | Persist the selected IDs and outcomes; do not exceed the hard maximum or replace a manifest without an explicit operation. |
 | A-04 | MongoDB is the local metadata/canonical-data candidate; Azure AI Search is the derived search index. | Approve system-of-record ownership and retention before Phase 2. |
-| A-05 | The MVP is local-first. The application stack is not deployed to Azure. | Keep cloud IaC and network-slice work behind Phase 7 approval. |
+| A-05 | The MVP is local-first. The application stack is not deployed to Azure. | Keep cloud IaC design-only and require separate authorization before any resource or workload deployment. |
 | A-06 | Query/response retention is a requested demo feature, but must be disabled until policy approval. | Approve the privacy impact assessment, notice, access, redaction, retention, and deletion controls before enabling it. |
 | A-07 | User questions, retrieved text, and provider responses are untrusted inputs. | Enforce validation, provenance, redaction, and abuse-case tests. |
 

@@ -1,7 +1,7 @@
 ---
 title: Phase 6 Evaluation v1
 description: Evaluation results for the local product support demo
-author: Product Support Agent Team
+author: Udaybhanu Karmakar
 ms.date: 2026-11-22
 ms.topic: reference
 keywords:

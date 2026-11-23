@@ -1,7 +1,7 @@
 ---
 title: Phase 2 Live Source Outcome Report
 description: Live OpenText feed and product-page outcome summary for the Phase 2 manifest
-author: Product Support Agent Team
+author: Udaybhanu Karmakar
 ms.date: 2026-11-21
 ms.topic: reference
 keywords:

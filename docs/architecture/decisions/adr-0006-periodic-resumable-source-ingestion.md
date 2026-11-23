@@ -1,7 +1,7 @@
 ---
 title: ADR-0006 Periodic, Resumable Documentation Ingestion
 description: Source map, fail-fast behavior, and durable fetch state for a scheduled documentation indexer
-author: Product Support Agent Team
+author: Udaybhanu Karmakar
 ms.date: 2026-11-22
 ms.topic: decision
 keywords:
