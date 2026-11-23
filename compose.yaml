@@ -30,6 +30,19 @@ services:
     volumes:
       - azurite_data:/data
 
+  aspire-dashboard:
+    # Local OpenTelemetry backend: traces, metrics, and structured logs at http://127.0.0.1:18888.
+    # It keeps telemetry in memory only and is cleared on restart.
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:13.6.5@sha256:e2b7cf9a4ead932de46c6fa2a289c7d6159cfcf06a51aa65f38253a8fae75407
+    environment:
+      # Loopback-only demo: the UI and OTLP ports are bound to 127.0.0.1 below.
+      ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"
+      ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL: http://0.0.0.0:18890
+    ports:
+      - "127.0.0.1:18888:18888"
+      - "127.0.0.1:4318:18890"
+    stop_grace_period: 10s
+
   api:
     build:
       context: .
@@ -40,6 +53,9 @@ services:
       PRODUCT_SUPPORT_MONGODB_URI: mongodb://mongodb:27017
       PRODUCT_SUPPORT_MANIFEST_PATH: /app/docs/operations/phase-2-product-manifest-v1.json
       PRODUCT_SUPPORT_SOURCE_MAP_PATH: /app/docs/operations/phase-3-source-map-v1.json
+      # OpenTelemetry: traces, metrics, and logs go to the local Aspire dashboard.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://aspire-dashboard:18890
+      OTEL_SERVICE_NAME: product-support-api
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
@@ -65,6 +81,9 @@ services:
       dockerfile: Containerfile
     environment:
       PRODUCT_SUPPORT_API_BASE_URL: http://api:8000
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://aspire-dashboard:18890
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_SERVICE_NAME: product-support-web
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:

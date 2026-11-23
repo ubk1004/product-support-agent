@@ -21,11 +21,15 @@ param keyVaultName string
 @maxLength(50)
 param registryName string
 
+@description('Application Insights name used for the telemetry-publisher role scope.')
+param applicationInsightsName string
+
 @description('Mandatory resource tags.')
 param tags object
 
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
 var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
+var monitoringMetricsPublisherRoleId = '3913510d-42f4-4e42-8a64-420c390055eb'
 
 resource apiIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: 'id-api-psa-${environment}-cac-${instance}'
@@ -47,6 +51,30 @@ resource registryPullIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: keyVaultName
+}
+
+resource applicationInsights 'Microsoft.Insights/components@2020-02-02' existing = {
+  name: applicationInsightsName
+}
+
+resource apiTelemetryPublisher 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(applicationInsights.id, apiIdentity.id, monitoringMetricsPublisherRoleId)
+  scope: applicationInsights
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', monitoringMetricsPublisherRoleId)
+    principalId: apiIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource ingestionTelemetryPublisher 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(applicationInsights.id, ingestionIdentity.id, monitoringMetricsPublisherRoleId)
+  scope: applicationInsights
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', monitoringMetricsPublisherRoleId)
+    principalId: ingestionIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
 }
 
 resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
@@ -85,8 +113,10 @@ resource registryPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
 
 output apiIdentityId string = apiIdentity.id
 output apiIdentityPrincipalId string = apiIdentity.properties.principalId
+output apiIdentityClientId string = apiIdentity.properties.clientId
 output ingestionIdentityId string = ingestionIdentity.id
 output ingestionIdentityPrincipalId string = ingestionIdentity.properties.principalId
+output ingestionIdentityClientId string = ingestionIdentity.properties.clientId
 output registryPullIdentityId string = registryPullIdentity.id
 output registryPullIdentityPrincipalId string = registryPullIdentity.properties.principalId
 output apiKeyVaultRoleAssignmentId string = apiKeyVaultSecretsUser.id

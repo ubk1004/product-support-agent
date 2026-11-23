@@ -27,6 +27,16 @@ param logAnalyticsCustomerId string
 @secure()
 param logAnalyticsSharedKey string
 
+@description('Application Insights connection string. It identifies the resource; with managed identity it grants no ingestion rights.')
+@secure()
+param applicationInsightsConnectionString string
+
+@description('Client ID of the API managed identity, used for Azure Monitor authentication.')
+param apiIdentityClientId string
+
+@description('Client ID of the ingestion managed identity, used for Azure Monitor authentication.')
+param ingestionIdentityClientId string
+
 @description('Key Vault URI used for secret references; no secret values are parameters.')
 param keyVaultUri string
 
@@ -166,6 +176,10 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
           keyVaultUrl: apiKeyVaultUrl
           identity: apiIdentityId
         }
+        {
+          name: 'appinsights-connection-string'
+          value: applicationInsightsConnectionString
+        }
       ]
     }
     template: {
@@ -217,6 +231,26 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'AZURE_OPENAI_API_KEY'
               secretRef: 'azure-openai-api-key'
+            }
+            {
+              name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+              secretRef: 'appinsights-connection-string'
+            }
+            {
+              name: 'PRODUCT_SUPPORT_TELEMETRY_USE_MANAGED_IDENTITY'
+              value: 'true'
+            }
+            {
+              name: 'AZURE_CLIENT_ID'
+              value: apiIdentityClientId
+            }
+            {
+              name: 'OTEL_SERVICE_NAME'
+              value: 'product-support-api'
+            }
+            {
+              name: 'PRODUCT_SUPPORT_ENVIRONMENT'
+              value: environment == 'prd' ? 'production' : environment
             }
           ]
         }
@@ -315,6 +349,10 @@ resource ingestionJob 'Microsoft.App/jobs@2024-03-01' = {
           keyVaultUrl: apiKeyVaultUrl
           identity: ingestionIdentityId
         }
+        {
+          name: 'appinsights-connection-string'
+          value: applicationInsightsConnectionString
+        }
       ]
       scheduleTriggerConfig: {
         cronExpression: '0 0 2 * * 0'
@@ -379,6 +417,26 @@ resource ingestionJob 'Microsoft.App/jobs@2024-03-01' = {
             {
               name: 'AZURE_OPENAI_API_KEY'
               secretRef: 'azure-openai-api-key'
+            }
+            {
+              name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+              secretRef: 'appinsights-connection-string'
+            }
+            {
+              name: 'PRODUCT_SUPPORT_TELEMETRY_USE_MANAGED_IDENTITY'
+              value: 'true'
+            }
+            {
+              name: 'AZURE_CLIENT_ID'
+              value: ingestionIdentityClientId
+            }
+            {
+              name: 'OTEL_SERVICE_NAME'
+              value: 'product-support-ingestion'
+            }
+            {
+              name: 'PRODUCT_SUPPORT_ENVIRONMENT'
+              value: environment == 'prd' ? 'production' : environment
             }
           ]
         }
