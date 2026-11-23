@@ -21,7 +21,7 @@ Each diagram marks components as **implemented** (code and tests exist) or
 | Area | State on 2026-11-23 |
 |---|---|
 | Catalog discovery and manifest | Implemented. The listing, search API, then product feed are tried in order; a protected source is skipped and noted, and `scripts/create_manifest.py` writes the manifest |
-| Ingestion queue and Phase 2 queue worker | Implemented and tested offline, but **not used** by the demo. The source worker runs from `scripts/run_source_ingestion.py` on the source map; the in-memory queue and Azurite stay unused (see the README) |
+| Ingestion queue | Implemented and used. `scripts/run_queue_ingestion.py` queues one message per manifest product on Azure Storage Queue (Azurite locally), and a worker ingests one product per message with the source worker and records each outcome in MongoDB. A live run recorded 100 of 100 products |
 | Source map, periodic source worker, fetch state, coverage API and UI | Implemented, tested offline ([ADR-0006](decisions/adr-0006-periodic-resumable-source-ingestion.md)) |
 | Canonical documents and chunks in MongoDB | Implemented; 300 pages ingested for 10 products |
 | Azure AI Search index, hybrid retrieval provider | Implemented. Ingestion embeds and indexes each stored page and deletes removed pages from Search in the same run (`--repository-only` skips Search). 952 chunks were indexed before this change |
@@ -88,12 +88,12 @@ flowchart TB
 
         subgraph Jobs["Ingestion"]
             CatalogSvc["Catalog client and manifest<br/>catalog.py, orchestration.py"]
-            Phase2Worker["Queue worker<br/>worker.py"]
+            QueueRunner["scripts/run_queue_ingestion.py"]
             SourceWorker["Source ingestion worker<br/>source_ingestion.py"]
             Runner["scripts/run_source_ingestion.py"]
         end
 
-        Azurite[("Azurite queue<br/>planned: not used by the demo")]
+        Azurite[("Azurite queue<br/>product-ingestion and -poison")]
         Mongo[(MongoDB)]
         FoundryClient["OpenAI-compatible Foundry client"]
     end
@@ -106,8 +106,10 @@ flowchart TB
     CoverageAPI --> Files
     CoverageAPI -->|Read fetch state| Mongo
     CatalogSvc --> Files
-    CatalogSvc -.->|planned| Azurite
-    Azurite -.->|planned| Phase2Worker
+    QueueRunner -->|enqueue: one message per product| Azurite
+    Azurite -->|one message at a time| QueueWorker["Queue worker<br/>queue_ingestion.py"]
+    QueueWorker --> SourceWorker
+    QueueWorker -->|per-product outcome| Mongo
     Manifest["scripts/create_manifest.py"] --> CatalogSvc
     Runner --> SourceWorker
     SourceWorker --> Files
@@ -345,7 +347,8 @@ erDiagram
 | Fetch state, run lease | MongoDB `source_fetch_state`, `ingestion_leases` | Decides what to fetch; never contains page content |
 | Canonical documents and chunks | MongoDB `canonical_documents`, `canonical_chunks` | System of record; not committed to git |
 | Searchable chunks and vectors | Azure AI Search, versioned index | Derived; rebuilt from MongoDB |
-| Queue messages | Azurite | Product references only |
+| Queue messages | Azurite locally, Azure Storage Queue in the cloud | Run ID and product reference only; deleted after the outcome is recorded |
+| Ingestion runs and product outcomes | MongoDB `ingestion_runs`, `product_ingestion_status` | Counts, outcomes, and reason categories; no page content |
 | Run and coverage reports | JSON output, API responses | Outcomes and counts only |
 
 ## Trust boundaries

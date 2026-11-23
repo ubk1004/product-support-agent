@@ -2,7 +2,7 @@
 title: Azure Infrastructure Design
 description: Design-only Bicep architecture and CI/CD bootstrap for the local-first demo
 author: Udaybhanu Karmakar
-ms.date: 2026-11-22
+ms.date: 2026-11-23
 ms.topic: reference
 keywords:
   - Azure
@@ -18,9 +18,9 @@ Scope note: this IaC is validated by build, lint and static review only and has 
 | Item | Written | Validated | Deployed |
 |---|---|---|---|
 | Network, platform, data, identity, Container Apps modules | Yes | `az bicep build`, `build-params`, and `lint` pass (2026-11-23) | **No** |
-| Scheduled ingestion job (Container Apps job) | Yes | Same static checks | **No** |
-| API Management | Optional module, off by default | Same static checks | **No** |
-| `infra`, `app`, and `validate` GitHub workflows | Yes | Linted with actionlint; hosted runs not verified | **No** |
+| Scheduled ingestion job (Container Apps job) | Yes. Runs `run_queue_ingestion.py run` against the private Storage Queue with managed identity (Queue Data Message Sender and Processor roles); the ingestion and poison queues are declared in Bicep | Same static checks | **No** |
+| API Management | Classic tier in external VNet mode: Developer for `dev` and `tst`, Premium for `prd`. Dedicated subnet, NSG, and static public IP; off in `dev` (`deployApim`) | Same static checks | **No** |
+| `infra`, `app`, and `validate` GitHub workflows | Yes | Checked offline by `tests/unit/test_workflows.py` (pinned actions verified against their tags, permissions, triggers, deployment gates); actionlint runs in CI but was not run locally; hosted runs not verified | **No** |
 | What-if against Azure | Attempted, blocked by an expired sign-in (`AADSTS700082`) | **Not run** | n/a |
 
 Nothing here is a claim that the infrastructure works in Azure. Static checks
@@ -29,14 +29,11 @@ errors.
 
 ### Known gaps
 
-* **API Management is not in external VNet mode.** Requirement 18 asks for APIM
-  deployed in external mode with VNet integration. The module uses the
-  `Consumption` SKU with `virtualNetworkType: 'None'`, which cannot join a VNet.
-  External mode needs a `Developer`, `Premium`, or `StandardV2` SKU, a dedicated
-  subnet and NSG, and a cost and SKU decision. That is a design decision for
-  the cloud and security owners, so it is recorded here and in the
-  [production gap register](../docs/operations/production-gap-register.md) and
-  not guessed at in code.
+* **API Management needs a cost decision before it is enabled.** The classic
+  Developer tier has no SLA and one unit; Premium is the production tier and is
+  billed per unit. First creation in VNet mode can take 45 minutes or more.
+  Callers authenticate with a subscription key; Entra ID sign-in (`validate-jwt`)
+  is a production gate.
 * **Key Vault secret values are not created by this IaC.** The job and apps
   reference `mongodb-connection-string`, `azure-ai-search-api-key`, and
   `azure-openai-api-key` by name. Someone with Key Vault access must create
@@ -52,9 +49,10 @@ errors.
   `dev-vnet`; it has not been created.
 * **Mongo-compatible store.** The Bicep provisions Azure Cosmos DB for MongoDB.
   The application has only been exercised against MongoDB 8 locally.
-* **No observability wiring beyond platform defaults.** Application
-  OpenTelemetry export is not implemented; see the
-  [traceability matrix](../docs/architecture/requirements-traceability.md).
+* **Telemetry is wired but untested in Azure.** The API and ingestion job send
+  OpenTelemetry traces, metrics, and logs to Application Insights with their
+  managed identities (Monitoring Metrics Publisher role), and API Management logs
+  requests without bodies. None of this has run in Azure.
 
 ## Azure infrastructure design
 
@@ -118,7 +116,7 @@ Global resource names include a short deterministic suffix.
    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`.
 4. Add these repository variables by name for the application workflow:
    `ACR_NAME`, `RESOURCE_GROUP_NAME`, `API_CONTAINER_APP_NAME`,
-   `WEB_CONTAINER_APP_NAME`.
+   `WEB_CONTAINER_APP_NAME`, `INGESTION_JOB_NAME`.
 
 The `dev` environment protects image publication, what-if, and manual
 deployment. The `infra` workflow deploys only on `workflow_dispatch`; the

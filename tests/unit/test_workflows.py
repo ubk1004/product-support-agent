@@ -141,17 +141,20 @@ def test_images_are_deployed_by_commit_sha_never_latest() -> None:
     ]
 
     assert tags and all("github.sha" in tag for tag in tags)
-    assert "latest" not in text
+    # An image reference ending in ":latest" (not the ubuntu-latest runner label).
+    assert not re.search(r"product-support-\w+:latest", text)
     assert "docker tag" not in text
 
 
-def test_infra_environments_match_the_parameter_files() -> None:
+def test_every_pipeline_environment_has_a_parameter_file() -> None:
     infra = load(WORKFLOW_DIR / "infra.yml")
     dispatch = triggers(infra)["workflow_dispatch"]["inputs"]["environment"]
     matrix = set(infra["jobs"]["validate"]["strategy"]["matrix"]["environment"])
     files = {path.stem for path in (ROOT / "infra" / "bicep" / "parameters").glob("*.bicepparam")}
 
-    assert set(dispatch["options"]) == matrix == files == {"dev", "tst", "prd"}
+    # Extra files, such as a one-off smoke-test deployment, are allowed.
+    assert set(dispatch["options"]) == matrix == {"dev", "tst", "prd"}
+    assert matrix <= files
 
 
 def test_files_the_workflows_build_exist() -> None:

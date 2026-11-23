@@ -55,6 +55,12 @@ param registryPullIdentityId string
 @description('Azure AI Search private endpoint address.')
 param searchEndpoint string
 
+@description('Queue service URL of the private storage account; the job uses managed identity.')
+param queueServiceUrl string
+
+@description('Name of the ingestion queue; the poison queue is this name plus -poison.')
+param ingestionQueueName string
+
 @description('Microsoft Foundry public endpoint parameter.')
 @minLength(1)
 @maxLength(255)
@@ -365,9 +371,11 @@ resource ingestionJob 'Microsoft.App/jobs@2024-03-01' = {
         {
           name: 'ingestion'
           image: apiImage
+          // One run: enqueue a message per manifest product, then process them one at a time.
           command: [
             'python'
-            'scripts/run_source_ingestion.py'
+            'scripts/run_queue_ingestion.py'
+            'run'
           ]
           resources: {
             cpu: json('0.5')
@@ -381,6 +389,18 @@ resource ingestionJob 'Microsoft.App/jobs@2024-03-01' = {
             {
               name: 'PRODUCT_SUPPORT_SOURCE_MAP_PATH'
               value: '/app/docs/operations/phase-3-source-map-v1.json'
+            }
+            {
+              name: 'PRODUCT_SUPPORT_MANIFEST_PATH'
+              value: '/app/docs/operations/phase-2-product-manifest-v1.json'
+            }
+            {
+              name: 'PRODUCT_SUPPORT_QUEUE_ACCOUNT_URL'
+              value: queueServiceUrl
+            }
+            {
+              name: 'PRODUCT_SUPPORT_INGESTION_QUEUE_NAME'
+              value: ingestionQueueName
             }
             {
               name: 'AZURE_AI_SEARCH_ENDPOINT'

@@ -21,7 +21,19 @@ class Settings(BaseSettings):
     catalog_max_response_bytes: int = Field(default=4_194_304, gt=0)
     max_demo_products: int = Field(default=100, gt=0, le=100)
     manifest_seed: str = "approved-demo-v1"
-    azurite_queue_connection_string: str | None = None
+    # Ingestion queue. Locally: Azurite (`UseDevelopmentStorage=true`, or its full connection
+    # string). In Azure: the storage account URL, authenticated with managed identity.
+    queue_connection_string: SecretStr | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "PRODUCT_SUPPORT_QUEUE_CONNECTION_STRING",
+            "PRODUCT_SUPPORT_AZURITE_QUEUE_CONNECTION_STRING",
+        ),
+    )
+    queue_account_url: str | None = None
+    # Storage service API version for the queue client. Leave unset in Azure; Azurite can lag the
+    # SDK's newest version, so Compose pins one the emulator supports.
+    queue_api_version: str | None = None
     ingestion_queue_name: str = "product-ingestion"
     poison_dequeue_count: int = Field(default=5, gt=0)
     manifest_path: str = "docs/operations/phase-2-product-manifest-v1.json"
@@ -37,6 +49,11 @@ class Settings(BaseSettings):
     query_response_retention_enabled: bool = False
     query_response_retention_days: int = Field(default=7, gt=0)
     query_reviewer_role: str | None = None
+
+    def queue_connection(self) -> str | None:
+        if self.queue_connection_string is None:
+            return None
+        return self.queue_connection_string.get_secret_value().strip() or None
 
     @model_validator(mode="after")
     def require_reviewer_for_retention(self) -> "Settings":

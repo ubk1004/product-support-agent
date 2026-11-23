@@ -1,7 +1,9 @@
 """Run one bounded, resumable documentation ingestion pass from the approved source map.
 
-Intended to be scheduled (for example weekly). Durable fetch state in MongoDB lets a rerun or a
-restart after a crash skip URLs fetched successfully within the freshness window.
+For queue-driven ingestion with one product per message, use `run_queue_ingestion.py`; both
+share the same worker, fetch state, and lease. Intended to be scheduled (for example weekly).
+Durable fetch state in MongoDB lets a rerun or a restart after a crash skip URLs fetched
+successfully within the freshness window.
 
 By default each stored or removed page is also embedded and written to, or deleted from, the
 versioned Azure AI Search index, so search stays consistent with MongoDB. Pass `--repository-only`
@@ -19,31 +21,13 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
-from azure.core.credentials import AzureKeyCredential
-from azure.search.documents.aio import SearchClient
-from azure.search.documents.indexes.aio import SearchIndexClient
-
-from product_support_agent.config import ModelAndSearchSettings, Settings
-from product_support_agent.document_store import (
-    CanonicalDocumentRepository,
-    MongoCanonicalDocumentRepository,
-)
-from product_support_agent.documents import HTML_PARSER_VERSION
-from product_support_agent.embeddings import OpenAICompatibleEmbedder
-from product_support_agent.fetch_state import FreshnessPolicy, MongoFetchStateStore
-from product_support_agent.http_fetch import BoundedFetcher
-from product_support_agent.indexing import DocumentIndexingService, RepositoryOnlyIndexer
-from product_support_agent.search import (
-    AzureAISearchProvider,
-    apply_search_index,
-    build_search_index,
-    build_versioned_index_name,
-)
-from product_support_agent.source_ingestion import (
-    SourceDocumentIndexer,
-    SourceIngestionLimits,
-    SourceIngestionWorker,
-)
+from product_support_agent.config import Settings
+from product_support_agent.document_store import MongoCanonicalDocumentRepository
+from product_support_agent.fetch_state import MongoFetchStateStore
+from product_support_agent.indexing import RepositoryOnlyIndexer
+from product_support_agent.ingestion_runtime import build_search_indexer, build_source_worker
+from product_support_agent.search import AzureAISearchProvider
+from product_support_agent.source_ingestion import SourceDocumentIndexer
 from product_support_agent.sources import load_source_map
 from product_support_agent.telemetry import (
     TelemetrySettings,
@@ -77,42 +61,6 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-async def build_search_indexer(
-    repository: CanonicalDocumentRepository,
-) -> tuple[SourceDocumentIndexer, AzureAISearchProvider]:
-    """Create the versioned index if needed and return an indexer that keeps Search in sync."""
-    settings = ModelAndSearchSettings()  # type: ignore[call-arg]
-    index_name = build_versioned_index_name(
-        settings.demo_index_base,
-        embedding_model_version=settings.embedding_model_version,
-        embedding_dimensions=settings.embedding_dimensions,
-        parser_version=HTML_PARSER_VERSION,
-    )
-    credential = AzureKeyCredential(settings.search_key.get_secret_value())
-    index_client = SearchIndexClient(settings.search_endpoint, credential)
-    try:
-        await apply_search_index(
-            index_client,
-            build_search_index(index_name, embedding_dimensions=settings.embedding_dimensions),
-        )
-    finally:
-        await index_client.close()
-    provider = AzureAISearchProvider(
-        SearchClient(settings.search_endpoint, index_name, credential),
-        embedding_dimensions=settings.embedding_dimensions,
-        embedding_model_version=settings.embedding_model_version,
-    )
-    embedder = OpenAICompatibleEmbedder(
-        base_url=settings.embedding_base_url,
-        api_key=settings.embedding_api_key.get_secret_value(),
-        deployment=settings.embedding_deployment,
-        model_version=settings.embedding_model_version,
-        dimensions=settings.embedding_dimensions,
-    )
-    indexer = DocumentIndexingService(repository=repository, search=provider, embedder=embedder)
-    return indexer, provider
-
-
 async def _run(args: argparse.Namespace, settings: Settings) -> int:
     mongo_uri = settings.mongodb_uri.get_secret_value().strip() if settings.mongodb_uri else ""
     if not mongo_uri:
@@ -135,29 +83,12 @@ async def _run(args: argparse.Namespace, settings: Settings) -> int:
         if not state.acquire_lease(LEASE_NAME, holder, now=now, ttl=lease_ttl):
             print("another source ingestion run holds the lease; exiting", file=sys.stderr)
             return 3
-        worker = SourceIngestionWorker(
+        worker = build_source_worker(
+            settings,
             source_map=source_map,
             state=state,
-            fetcher=BoundedFetcher(
-                user_agent=settings.source_user_agent,
-                max_retry_after_seconds=settings.source_max_retry_after_seconds,
-            ),
-            indexer=indexer,
             repository=repository,
-            policy=FreshnessPolicy(
-                success_freshness=timedelta(hours=settings.source_success_freshness_hours),
-                transient_failure_backoff=timedelta(
-                    hours=settings.source_transient_failure_backoff_hours
-                ),
-                permanent_failure_backoff=timedelta(
-                    days=settings.source_permanent_failure_backoff_days
-                ),
-            ),
-            limits=SourceIngestionLimits(
-                request_budget=settings.source_request_budget,
-                min_request_interval_seconds=settings.source_min_request_interval_seconds,
-                fail_fast_consecutive_failures=settings.source_fail_fast_consecutive_failures,
-            ),
+            indexer=indexer,
         )
         with tracer().start_as_current_span("psa.ingestion.run") as span:
             span.set_attribute("psa.ingestion.search_indexing", provider is not None)
