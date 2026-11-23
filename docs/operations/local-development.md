@@ -87,10 +87,10 @@ podman machine list
 podman machine start
 ```
 
-From the repository root, one command builds and starts MongoDB, Azurite, the
-API, and the web app. The API uses an in-memory queue; Azurite is not connected
-to the current workflow. Health checks gate startup order, and published ports
-bind only to loopback:
+From the repository root, one command builds and starts MongoDB, Azurite (the
+ingestion queue), the Aspire dashboard (OpenTelemetry), the API, and the web
+app. Health checks gate startup order, and published ports bind only to
+loopback:
 
 ```powershell
 podman compose up --build -d
@@ -107,16 +107,29 @@ pages ingested for the 10 covered products. A new empty MongoDB volume needs a
 bounded ingestion and indexing pass before chat can answer:
 
 ```powershell
-podman compose run --rm api uv run --no-sync python scripts/run_source_ingestion.py
-podman compose run --rm api uv run --no-sync python scripts/index_documents.py
+podman compose run --rm api python scripts/run_queue_ingestion.py run
+podman compose run --rm api python scripts/run_queue_ingestion.py status
 ```
+
+`run` queues one message per manifest product, then works through the queue one
+product at a time, embedding and indexing each product's pages into Azure AI
+Search and recording its outcome in MongoDB. `status` prints the run and one line
+per product. The same data is at `http://127.0.0.1:8000/ingestion/runs/latest`.
+Use `enqueue` and `work` separately to queue a run now and process it later, and
+`--product <id>` to limit a run. Run commands with `python`, not `uv run`: the
+image runs as a non-root user without a writable uv cache.
 
 Ingestion uses only
 [`phase-3-source-map-v1.json`](./phase-3-source-map-v1.json), the configured
 request budget, robots policy, freshness checks, and backoff. Indexing creates
 or updates the `product-support-demo-*` Search index from canonical MongoDB
 documents using the Foundry embedding deployment. These commands do not
-provision Azure resources. Rerun indexing after ingesting new or changed pages.
+provision Azure resources. `scripts/index_documents.py` rebuilds the index from
+MongoDB, for example after an embedding model change.
+
+Traces, metrics, and logs from the web app, API, and ingestion job are at
+`http://127.0.0.1:18888`. They hold metadata only, never question or answer
+text, and are cleared when the dashboard container restarts.
 
 Ask a question in the web page and optionally filter to an indexed product.
 Answers are plain text; citation links come from retrieved evidence. If no

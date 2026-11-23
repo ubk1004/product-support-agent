@@ -14,7 +14,8 @@ services:
       start_period: 10s
 
   azurite:
-    image: mcr.microsoft.com/azure-storage/azurite:3.35.0
+    # Local stand-in for Azure Storage Queue: one message per product to ingest.
+    image: mcr.microsoft.com/azure-storage/azurite:3.38.0@sha256:c26024d62bf4a5b88a40968afd217234c00e1fc9a4790dc6105d1ca7979f6eec
     stop_grace_period: 30s
     command:
       - azurite
@@ -53,6 +54,11 @@ services:
       PRODUCT_SUPPORT_MONGODB_URI: mongodb://mongodb:27017
       PRODUCT_SUPPORT_MANIFEST_PATH: /app/docs/operations/phase-2-product-manifest-v1.json
       PRODUCT_SUPPORT_SOURCE_MAP_PATH: /app/docs/operations/phase-3-source-map-v1.json
+      # Ingestion queue on Azurite. This is Azurite's published, well-known development key,
+      # not a secret; it only works against the local emulator.
+      PRODUCT_SUPPORT_QUEUE_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;QueueEndpoint=http://azurite:10001/devstoreaccount1;
+      PRODUCT_SUPPORT_INGESTION_QUEUE_NAME: product-ingestion
+      PRODUCT_SUPPORT_QUEUE_API_VERSION: "2026-06-06"
       # OpenTelemetry: traces, metrics, and logs go to the local Aspire dashboard.
       OTEL_EXPORTER_OTLP_ENDPOINT: http://aspire-dashboard:18890
       OTEL_SERVICE_NAME: product-support-api
@@ -61,6 +67,8 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
+      azurite:
+        condition: service_started
     healthcheck:
       test:
         [
@@ -95,7 +103,7 @@ services:
           "CMD",
           "node",
           "-e",
-          "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+          "fetch('http://127.0.0.1:3000/api/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
         ]
       interval: 10s
       timeout: 3s

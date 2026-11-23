@@ -13,8 +13,15 @@ ms.topic: how-to
 * `docs/demo/poster.png`, the still image shown in the README.
 
 The video uses the real stack: real answers from the configured Foundry and
-Azure AI Search services. It shows questions and answers only, and no
-credentials or settings.
+Azure AI Search services, and real traces from the Aspire dashboard. It is
+recorded at 1920x1080 and 100% zoom so the whole width of the page is visible.
+It shows questions, answers, and trace timings only, and no credentials or
+settings.
+
+A native drop-down list is drawn by the operating system, not the page, so it
+never appears in a browser recording. To show the product filter's values, the
+recorder expands the real `<select>` in place, highlights the option being
+chosen, and then selects it.
 
 ## Record
 

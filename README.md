@@ -15,17 +15,24 @@ keywords:
 
 [![Product Support Agent demo: coverage, a cited answer, a follow-up, and refusals](docs/demo/poster.png)](docs/demo/product-support-agent-demo.webm)
 
-The [short walkthrough](docs/demo/product-support-agent-demo.webm) (select the
-link to play it) shows, in this order:
+The [walkthrough](docs/demo/product-support-agent-demo.webm) (2 min 44 s, 1920x1080;
+select the link to play it) shows the full page at normal zoom, in this order:
 
 1. **Scope first.** A fixed sample of 100 OpenText products, of which **10** have
-   documentation indexed (300 pages). The other 90 are listed as not covered.
-2. **What it covers.** The agent lists the products it can answer about.
-3. **A cited answer.** Every claim has a numbered source that links to the exact
+   documentation indexed (300 pages).
+2. **The whole page.** The coverage table with pages and index dates for the 10
+   indexed products, then the other 90 listed as not searchable.
+3. **What it covers.** A starter question; the agent lists the products it can
+   answer about.
+4. **The product filter, open.** All 10 values are visible, and LoadRunner
+   Professional is chosen before the question is asked.
+5. **A cited answer.** Every claim has a numbered source that links to the exact
    documentation page.
-4. **A follow-up question** that keeps the conversation context.
-5. **A product that is not indexed**, which it says it cannot answer.
-6. **A hostile prompt**, which is refused and produces no invented links.
+6. **A follow-up question** that keeps the conversation context.
+7. **A product that is not indexed**, which it says it cannot answer.
+8. **A hostile prompt**, which is refused and produces no invented links.
+9. **Monitoring.** The OpenTelemetry trace of a chat request, from the browser
+   through the API, the agent, the search tool, and each model call.
 
 To regenerate the video against a running stack, see
 [scripts/demo/](scripts/demo/README.md).
@@ -50,9 +57,9 @@ resolved by the server from that evidence.
 The browser calls only the TypeScript/Next.js server. Next.js calls the Python
 FastAPI service, which uses Microsoft Foundry for chat and embeddings and Azure
 AI Search for hybrid retrieval. MongoDB stores canonical documents and
-ingestion state. The API currently uses an in-memory queue for catalog
-processing; Azurite starts in Compose but is not wired into the current
-workflow. MongoDB and Azurite run in Podman, not in Azure.
+ingestion state. Ingestion runs through a queue: one message per product on
+Azure Storage Queue (Azurite locally), processed one at a time with each
+product's outcome recorded. MongoDB and Azurite run in Podman, not in Azure.
 
 The approved source map covers 10 of the 100 manifest products. It has ingested
 300 pages and indexed 952 chunks. See [Evaluation results](#evaluation-results)
@@ -235,17 +242,20 @@ Open [http://127.0.0.1:3000](http://127.0.0.1:3000). Check the API at
 [http://127.0.0.1:8000/catalog/coverage](http://127.0.0.1:8000/catalog/coverage).
 The browser never calls FastAPI directly.
 
-If the local MongoDB volume is empty, run the bounded ingestion pass and then
-index the canonical pages into Azure AI Search:
+If the local MongoDB volume is empty, run a queue-driven ingestion pass. It
+queues one message per manifest product, ingests each product, indexes its pages
+into Azure AI Search, and records the outcome for every product:
 
 ```powershell
-podman compose run --rm api uv run --no-sync python scripts/run_source_ingestion.py
-podman compose run --rm api uv run --no-sync python scripts/index_documents.py
+podman compose run --rm api python scripts/run_queue_ingestion.py run
+podman compose run --rm api python scripts/run_queue_ingestion.py status
 ```
 
-These commands use only the approved source map, robots policy, freshness
-checks, request budget, and backoff. The index script creates or updates the
-versioned demo index. Ingestion uses real public sources and configured Foundry
+This uses only the approved source map, robots policy, freshness checks, request
+budget, and backoff. Pages fetched in the last 24 hours are skipped, so a rerun
+makes no requests. `scripts/run_source_ingestion.py` runs the same worker
+without the queue, and `scripts/index_documents.py` rebuilds the Search index
+from MongoDB. Ingestion uses real public sources and configured Foundry
 deployments, so follow the budgets and limits in the
 [local runbook](docs/operations/local-development.md).
 
@@ -267,12 +277,22 @@ Compose passes `.env` only to the API container and overrides the MongoDB and
 manifest/source-map paths for the container network. Query/response retention
 is not implemented in the demo and must remain off.
 
+### Ingestion queue
+
+| Variable | Purpose and local-demo guidance |
+|---|---|
+| `PRODUCT_SUPPORT_QUEUE_CONNECTION_STRING` | Queue connection string. Compose sets Azurite's published development key; do not use a real storage key here. `PRODUCT_SUPPORT_AZURITE_QUEUE_CONNECTION_STRING` is accepted as an alias. |
+| `PRODUCT_SUPPORT_QUEUE_ACCOUNT_URL` | Azure: the storage account queue URL. The job signs in with its managed identity; shared keys are disabled on the account. |
+| `PRODUCT_SUPPORT_QUEUE_API_VERSION` | Storage API version for the queue client. Compose pins `2026-06-06`, the newest version Azurite 3.38 accepts. Leave unset in Azure. |
+| `PRODUCT_SUPPORT_INGESTION_QUEUE_NAME` | Queue name, default `product-ingestion`. The poison queue is this name plus `-poison`. |
+| `PRODUCT_SUPPORT_POISON_DEQUEUE_COUNT` | Deliveries before a message is moved to the poison queue, default 5. |
+
 ### Catalog workflow
 
 These settings configure catalog discovery. They are not needed for normal
-chat startup or the source-map-based documentation ingestion job. The current
-API uses an in-memory queue; the Azurite service started by Compose is not
-connected to this workflow.
+chat startup or the source-map-based documentation ingestion job. The
+ingestion queue settings are listed under
+[Ingestion queue](#ingestion-queue).
 
 | Variable | Purpose and local-demo guidance |
 |---|---|
@@ -399,9 +419,23 @@ alongside the [architecture overview](docs/architecture/architecture-overview.md
    by first use. The UI renders answers as plain text with linked markers, and
    the source links come only from the citation list.
 
-The ingestion queue (`queue.py`, Azurite) is implemented and tested, but the
-demo does not use it: the source worker runs directly from the source map. It
-is the intended path when ingestion moves to the cloud.
+Ingestion is queue-driven (`scripts/run_queue_ingestion.py`):
+
+1. **Enqueue.** One message per manifest product with an approved source. Each
+   message carries only the run ID and a product reference. Products without a
+   source are recorded at once as skipped, with the reason `no_public_source`.
+2. **Work.** The worker takes one message, runs the source worker for that
+   product, writes the outcome (`success`, `partial`, `skipped`, `failed`, or
+   `dead_letter`) and page counts to MongoDB, then deletes the message.
+3. **Recover.** A worker that crashes before the delete leaves the message, which
+   reappears after the 15-minute visibility timeout; reprocessing is idempotent.
+   A message delivered five times moves to `product-ingestion-poison`. If the
+   request budget runs out, the product is requeued with a one-hour delay.
+4. **Report.** The run completes when every product has an outcome. Read it with
+   `run_queue_ingestion.py status` or `GET /ingestion/runs/latest`.
+
+The last local run recorded all 100 products: 10 succeeded and 90 were skipped
+as having no approved public source. Both queues were empty afterwards.
 
 The OpenText Service Management expansion is a design only; see
 [service-management-expansion.md](docs/architecture/service-management-expansion.md).

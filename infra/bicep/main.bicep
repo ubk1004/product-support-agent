@@ -154,6 +154,7 @@ module identity 'modules/identity.bicep' = {
     keyVaultName: platform.outputs.keyVaultName
     registryName: platform.outputs.registryName
     applicationInsightsName: platform.outputs.applicationInsightsName
+    storageAccountName: data.outputs.storageAccountName
     tags: tags
   }
 }
@@ -179,6 +180,8 @@ module containerApps 'modules/container-apps.bicep' = {
     ingestionIdentityId: identity.outputs.ingestionIdentityId
     registryPullIdentityId: identity.outputs.registryPullIdentityId
     searchEndpoint: data.outputs.searchEndpoint
+    queueServiceUrl: data.outputs.queueServiceUrl
+    ingestionQueueName: data.outputs.queueName
     foundryEndpoint: foundryEndpoint
     foundryChatDeployment: foundryChatDeployment
     foundryEmbeddingDeployment: foundryEmbeddingDeployment

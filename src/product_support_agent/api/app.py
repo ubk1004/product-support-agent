@@ -29,7 +29,7 @@ from product_support_agent.orchestration import PhaseTwoService
 from product_support_agent.queue import InMemoryQueue
 from product_support_agent.request_context import create_request_id, request_id_context
 from product_support_agent.sources import load_source_map
-from product_support_agent.store import InMemoryIngestionStore
+from product_support_agent.store import InMemoryIngestionStore, MongoIngestionStore
 from product_support_agent.telemetry import (
     TelemetrySettings,
     configure_telemetry,
@@ -126,17 +126,46 @@ async def catalog_manifest() -> dict[str, object]:
     }
 
 
+def _read_ingestion_run(run_id: str | None) -> dict[str, object] | None:
+    """The queue-driven run with per-product outcomes, from MongoDB. Metadata only."""
+    mongo_uri = settings.mongodb_uri.get_secret_value().strip() if settings.mongodb_uri else ""
+    if not mongo_uri:
+        return None
+    store = MongoIngestionStore(mongo_uri)
+    try:
+        run = store.get_run(run_id) if run_id else store.latest_run()
+        if run is None:
+            return {"run": None, "products": []}
+        return {
+            "run": run.model_dump(mode="json"),
+            "products": [
+                status.model_dump(mode="json") for status in store.list_products(run.run_id)
+            ],
+        }
+    except PyMongoError:
+        logger.warning("ingestion run state unavailable")
+        return None
+    finally:
+        store.close()
+
+
+ingestion_run_reader: Callable[[str | None], dict[str, object] | None] = _read_ingestion_run
+
+
+@app.get("/ingestion/runs/latest", tags=["ingestion"])
+async def latest_ingestion_run() -> dict[str, object]:
+    result = await asyncio.to_thread(ingestion_run_reader, None)
+    if result is None:
+        raise HTTPException(status_code=503, detail="ingestion state unavailable")
+    return result
+
+
 @app.get("/ingestion/runs/{run_id}", tags=["ingestion"])
 async def ingestion_run(run_id: str) -> dict[str, object]:
-    run = _phase_two_store.runs.get(run_id)
-    if run is None:
-        return {"run": None}
-    products = [
-        status.model_dump(mode="json")
-        for (status_run_id, _), status in _phase_two_store.products.items()
-        if status_run_id == run_id
-    ]
-    return {"run": run.model_dump(mode="json"), "products": products}
+    result = await asyncio.to_thread(ingestion_run_reader, run_id)
+    if result is None:
+        raise HTTPException(status_code=503, detail="ingestion state unavailable")
+    return result
 
 
 @app.get("/catalog/coverage", tags=["catalog"])

@@ -95,6 +95,12 @@ resource ingestionQueue 'Microsoft.Storage/storageAccounts/queueServices/queues@
   name: queueName
 }
 
+// Messages delivered too many times are moved here by the worker for investigation.
+resource poisonQueue 'Microsoft.Storage/storageAccounts/queueServices/queues@2023-05-01' = {
+  parent: queueService
+  name: '${queueName}-poison'
+}
+
 resource searchService 'Microsoft.Search/searchServices@2025-05-01' = {
   name: searchServiceName
   location: location
@@ -317,6 +323,7 @@ resource registryDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGrou
 output cosmosAccountName string = cosmosAccount.name
 output storageAccountName string = storageAccount.name
 output queueName string = ingestionQueue.name
+output queueServiceUrl string = storageAccount.properties.primaryEndpoints.queue
 output queueId string = ingestionQueue.id
 output searchServiceName string = searchService.name
 output searchEndpoint string = searchService.properties.endpoint

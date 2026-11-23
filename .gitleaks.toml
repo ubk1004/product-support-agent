@@ -1,0 +1,9 @@
+# Gitleaks configuration: the default rules plus one narrow allowlist entry.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Azurite's published development account key; it only authenticates to the local emulator"
+regexTarget = "match"
+regexes = ['''Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==''']
+paths = ['''^compose\.yaml$''']

@@ -116,7 +116,7 @@ class _BudgetExhausted(Exception):
 
 
 @dataclass
-class _RunContext:
+class RunContext:
     report: SourceRunReport
     robots: dict[str, RobotsPolicy] = field(default_factory=dict)
     last_request_at: dict[str, float] = field(default_factory=dict)
@@ -180,10 +180,25 @@ class SourceIngestionWorker:
         `force` ignores freshness and backoff (use after a reset). `discover_only` fetches
         robots.txt and seeds and reports the page selection without fetching pages.
         """
-        self._force = force
-        self._discover_only = discover_only
         wanted = set(product_ids) if product_ids else None
-        context = _RunContext(
+        context = self.begin()
+        for source in self.source_map.enabled_sources():
+            if wanted is not None and source.product_id not in wanted:
+                continue
+            result = await self.process_source(
+                source, context, force=force, discover_only=discover_only
+            )
+            if result.outcome == "budget_exhausted":
+                context.report.stopped_reason = "request_budget_exhausted"
+                break
+        context.report.finished_at = self.clock()
+        return context.report
+
+    def begin(self) -> RunContext:
+        """Start a run. One context shares the request budget, robots.txt cache, and per-host
+        request spacing across every product processed with it, including products handed over
+        one at a time from a queue."""
+        return RunContext(
             report=SourceRunReport(
                 source_map_version=self.source_map.source_map_version,
                 manifest_version=self.source_map.manifest_version,
@@ -191,18 +206,23 @@ class SourceIngestionWorker:
                 request_budget=self.limits.request_budget,
             )
         )
-        for source in self.source_map.enabled_sources():
-            if wanted is not None and source.product_id not in wanted:
-                continue
-            result = await self._run_product(source, context)
-            context.report.products.append(result)
-            if result.outcome == "budget_exhausted":
-                context.report.stopped_reason = "request_budget_exhausted"
-                break
-        context.report.finished_at = self.clock()
-        return context.report
 
-    async def _run_product(self, source: ProductSource, context: _RunContext) -> ProductRunResult:
+    async def process_source(
+        self,
+        source: ProductSource,
+        context: RunContext,
+        *,
+        force: bool = False,
+        discover_only: bool = False,
+    ) -> ProductRunResult:
+        """Ingest exactly one product and append its result to the context's report."""
+        self._force = force
+        self._discover_only = discover_only
+        result = await self._run_product(source, context)
+        context.report.products.append(result)
+        return result
+
+    async def _run_product(self, source: ProductSource, context: RunContext) -> ProductRunResult:
         result = ProductRunResult(
             product_id=source.product_id,
             product_name=source.product_name,
@@ -299,7 +319,7 @@ class SourceIngestionWorker:
     async def _discover(
         self,
         source: ProductSource,
-        context: _RunContext,
+        context: RunContext,
     ) -> list[PageCandidate] | None:
         key = fetch_state_key(source.product_id, source.seed_url)
         previous = self.state.get(key)
@@ -389,7 +409,7 @@ class SourceIngestionWorker:
             "source_config_hash": source_config_hash(source),
         }
 
-    async def _robots_allows(self, candidate: PageCandidate, context: _RunContext) -> bool:
+    async def _robots_allows(self, candidate: PageCandidate, context: RunContext) -> bool:
         for url in dict.fromkeys((candidate.fetch_url, candidate.citation_url)):
             if not (await self._robots(url, context)).is_allowed(url):
                 return False
@@ -429,7 +449,7 @@ class SourceIngestionWorker:
         self,
         source: ProductSource,
         pages: Sequence[PageCandidate],
-        context: _RunContext,
+        context: RunContext,
         result: ProductRunResult,
     ) -> None:
         consecutive_failures = 0
@@ -473,7 +493,7 @@ class SourceIngestionWorker:
         self,
         source: ProductSource,
         page: PageCandidate,
-        context: _RunContext,
+        context: RunContext,
     ) -> PageResult:
         key = fetch_state_key(source.product_id, page.citation_url)
         previous = self.state.get(key)
@@ -676,7 +696,7 @@ class SourceIngestionWorker:
     async def _request(
         self,
         url: str,
-        context: _RunContext,
+        context: RunContext,
         *,
         headers: dict[str, str] | None = None,
         json_like: bool = False,
@@ -699,7 +719,7 @@ class SourceIngestionWorker:
         context.report.requests += max(response.attempt_count - 1, 0)
         return response
 
-    async def _robots(self, url: str, context: _RunContext) -> RobotsPolicy:
+    async def _robots(self, url: str, context: RunContext) -> RobotsPolicy:
         host = urlparse(url).hostname or ""
         cached = context.robots.get(host)
         if cached is not None:
@@ -718,7 +738,7 @@ class SourceIngestionWorker:
         context.robots[host] = policy
         return policy
 
-    async def _reserve_request(self, host: str, context: _RunContext) -> None:
+    async def _reserve_request(self, host: str, context: RunContext) -> None:
         if context.report.requests >= self.limits.request_budget:
             raise _BudgetExhausted
         last = context.last_request_at.get(host)
