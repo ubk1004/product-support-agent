@@ -13687,7 +13687,7 @@
             },
             "isPty": false,
             "terminalCommandOutput": {
-              "text": "ERROR: V2Error: invalid_grant AADSTS700082: The refresh token has expired due to inactivity.�The token was issued on 2026-07-24T17:10:07.2259108Z and was inactive for 90.00:00:00. Trace ID: 9a0f51f6-84f5-4188-9a93-bff8b12e1700 Correlation ID: 15917453-61c0-493f-a786-11c31bcbf6b8 Timestamp: 2026-11-22 23:48:26Z. Status: Response_Status.Status_InteractionRequired, Error code: 3399614467, Tag: 558133255\r\nRun the command below to authenticate interactively; additional arguments may be added as needed:\r\naz logout\r\naz login --tenant \"2dae5591-1747-5bf6-8fea-c21c303b5d04\" --scope \"https://management.core.windows.net//.default\"\r\n"
+              "text": "ERROR: V2Error: invalid_grant AADSTS700082: The refresh token has expired due to inactivity.�The token was issued on 2026-07-24T17:10:07.2259108Z and was inactive for 90.00:00:00. Trace ID: 9a0f51f6-84f5-4188-9a93-bff8b12e1700 Correlation ID: 15917453-61c0-493f-a786-11c31bcbf6b8 Timestamp: 2026-11-22 23:48:26Z. Status: Response_Status.Status_InteractionRequired, Error code: 3399614467, Tag: 558133255\r\nRun the command below to authenticate interactively; additional arguments may be added as needed:\r\naz logout\r\naz login --tenant \"xxxxx-xxxx-xx-xxx-xxxx\" --scope \"https://management.core.windows.net//.default\"\r\n"
             },
             "terminalCommandState": {
               "exitCode": 1
