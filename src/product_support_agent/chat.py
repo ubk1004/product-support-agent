@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,6 +35,7 @@ from product_support_agent.search import (
     build_versioned_index_name,
 )
 from product_support_agent.sources import load_source_map
+from product_support_agent.telemetry import record_search, tracer
 
 MAX_CHAT_MESSAGE_CHARS = 2_000
 MAX_HISTORY_TURNS = 8
@@ -194,16 +196,27 @@ class EmbeddedSearchRetriever:
     async def search(
         self, query: str, *, product_ids: Sequence[str], top: int = DEFAULT_SEARCH_TOP
     ) -> list[SearchResult]:
-        try:
-            embedding = await self._embedder.embed_query(query)
-            return await self._search.search(
-                query,
-                embedding,
-                top=top,
-                product_ids=product_ids,
-            )
-        except (DocumentIndexingError, AzureError, httpx.HTTPError, ValueError) as error:
-            raise SearchUnavailable("search service is unavailable") from error
+        started_at = time.perf_counter()
+        with tracer().start_as_current_span("psa.retrieve") as span:
+            span.set_attribute("psa.search.product_filter_count", len(product_ids))
+            span.set_attribute("psa.search.top", top)
+            try:
+                embedding = await self._embedder.embed_query(query)
+                results = await self._search.search(
+                    query,
+                    embedding,
+                    top=top,
+                    product_ids=product_ids,
+                )
+            except (DocumentIndexingError, AzureError, httpx.HTTPError, ValueError) as error:
+                span.record_exception(error)
+                span.set_attribute("psa.search.outcome", "failed")
+                record_search((time.perf_counter() - started_at) * 1000, 0, failed=True)
+                raise SearchUnavailable("search service is unavailable") from error
+            span.set_attribute("psa.search.outcome", "ok")
+            span.set_attribute("psa.search.results", len(results))
+            record_search((time.perf_counter() - started_at) * 1000, len(results))
+            return results
 
 
 class FrameworkChatRunner:
@@ -303,6 +316,11 @@ class _AnswerSession:
     ) -> str:
         if not self._take_tool_call():
             return "Tool call limit reached. Answer using the evidence already returned."
+        with tracer().start_as_current_span("psa.tool.search_documentation") as span:
+            span.set_attribute("psa.tool.product_ids", len(product_ids or ()))
+            return await self._search_documentation(query, product_ids)
+
+    async def _search_documentation(self, query: str, product_ids: list[str] | None) -> str:
         query = query.strip()
         if not query or len(query) > MAX_CHAT_MESSAGE_CHARS:
             raise ChatToolInputError("query must contain 1 to 2000 characters")
@@ -356,6 +374,11 @@ class _AnswerSession:
     ) -> str:
         if not self._take_tool_call():
             return "Tool call limit reached. Answer using the evidence already returned."
+        with tracer().start_as_current_span("psa.tool.list_products") as span:
+            span.set_attribute("psa.tool.has_name", bool(name and name.strip()))
+            return self._list_products(name)
+
+    def _list_products(self, name: str | None) -> str:
         lookup = (name or "").strip()[:200]
         products = self._catalog.find(lookup) if lookup else list(self._catalog.searchable_products)
         items = [
@@ -424,7 +447,12 @@ class ChatService:
             list_products=session.list_products,
             instructions=self._instructions(product_ids),
         )
-        run = await self._runner.run(message, tools, _sanitize_history(history))
+        with tracer().start_as_current_span("psa.answer") as span:
+            span.set_attribute("psa.history_turns", len(history))
+            span.set_attribute("psa.product_filter_count", len(product_ids or ()))
+            run = await self._runner.run(message, tools, _sanitize_history(history))
+            span.set_attribute("psa.evidence_items", len(session.retrieved))
+            span.set_attribute("psa.content_filtered", run.content_filtered)
         if session.search_failed:
             raise SearchUnavailable("search service is unavailable")
 

@@ -30,9 +30,17 @@ from product_support_agent.queue import InMemoryQueue
 from product_support_agent.request_context import create_request_id, request_id_context
 from product_support_agent.sources import load_source_map
 from product_support_agent.store import InMemoryIngestionStore
+from product_support_agent.telemetry import (
+    TelemetrySettings,
+    configure_telemetry,
+    current_span_set,
+    instrument_fastapi,
+    record_chat,
+)
 
 configure_redacted_logging()
 logger = logging.getLogger(__name__)
+_telemetry = configure_telemetry(TelemetrySettings(), service_name="product-support-api")
 
 CHAT_TIMEOUT_SECONDS = 30.0
 MAX_CONCURRENT_CHAT_REQUESTS = 4
@@ -45,9 +53,11 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     yield
     if _chat_service is not None:
         await _chat_service.close()
+    _telemetry.shutdown()
 
 
 app = FastAPI(title="Product Support Agent", lifespan=lifespan)
+instrument_fastapi(app, _telemetry)
 
 settings = Settings()
 _phase_two_store = InMemoryIngestionStore()
@@ -166,6 +176,7 @@ async def chat(payload: dict[str, object]) -> dict[str, object]:
 
     started_at = time.perf_counter()
     request_id = request_id_context.get()
+    current_span_set({"psa.request_id": request_id, "psa.history_turns": len(chat_request.history)})
     try:
         async with _chat_concurrency:
             service = get_chat_service()
@@ -178,45 +189,60 @@ async def chat(payload: dict[str, object]) -> dict[str, object]:
                 timeout=CHAT_TIMEOUT_SECONDS,
             )
     except UncoveredProductError as error:
-        logger.info(
-            "chat completed outcome=uncovered_product latency_ms=%d",
-            round((time.perf_counter() - started_at) * 1000),
-        )
+        _finish_chat("uncovered_product", started_at, logging.INFO)
         raise HTTPException(
             status_code=422,
             detail={"code": "uncovered_product"},
         ) from error
     except SearchUnavailable as error:
-        logger.warning(
-            "chat completed outcome=search_unavailable latency_ms=%d",
-            round((time.perf_counter() - started_at) * 1000),
-        )
+        _finish_chat("search_unavailable", started_at, logging.WARNING)
         raise HTTPException(status_code=503, detail="search service unavailable") from error
     except ChatModelUnavailable as error:
-        logger.warning(
-            "chat completed outcome=model_unavailable latency_ms=%d",
-            round((time.perf_counter() - started_at) * 1000),
-        )
+        _finish_chat("model_unavailable", started_at, logging.WARNING)
         raise HTTPException(status_code=502, detail="chat model unavailable") from error
     except TimeoutError as error:
-        logger.warning(
-            "chat completed outcome=timeout latency_ms=%d",
-            round((time.perf_counter() - started_at) * 1000),
-        )
+        _finish_chat("timeout", started_at, logging.WARNING)
         raise HTTPException(status_code=504, detail="chat request timed out") from error
     except ValidationError as error:
-        logger.error(
-            "chat completed outcome=configuration_error latency_ms=%d",
-            round((time.perf_counter() - started_at) * 1000),
-        )
+        _finish_chat("configuration_error", started_at, logging.ERROR)
         raise HTTPException(status_code=503, detail="chat service unavailable") from error
 
-    logger.info(
-        "chat completed outcome=%s latency_ms=%d input_tokens=%s output_tokens=%s",
+    _finish_chat(
         _chat_outcome(execution),
-        round((time.perf_counter() - started_at) * 1000),
-        execution.input_tokens,
-        execution.output_tokens,
+        started_at,
+        logging.INFO,
+        citations=len(execution.response.citations),
+        input_tokens=execution.input_tokens,
+        output_tokens=execution.output_tokens,
     )
     response = execution.response.model_copy(update={"request_id": request_id})
     return response.model_dump(mode="json")
+
+
+def _finish_chat(
+    outcome: str,
+    started_at: float,
+    level: int,
+    *,
+    citations: int = 0,
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
+) -> None:
+    """Log, measure, and tag the request span with one metadata-only outcome."""
+    duration_ms = (time.perf_counter() - started_at) * 1000
+    logger.log(
+        level,
+        "chat completed outcome=%s latency_ms=%d input_tokens=%s output_tokens=%s",
+        outcome,
+        round(duration_ms),
+        input_tokens,
+        output_tokens,
+    )
+    record_chat(
+        outcome,
+        duration_ms,
+        citations=citations,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+    )
+    current_span_set({"psa.chat.outcome": outcome, "psa.chat.citations": citations})

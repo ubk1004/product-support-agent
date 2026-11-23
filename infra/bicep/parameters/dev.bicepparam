@@ -13,3 +13,6 @@ param embeddingDimensions = 1536
 param apiImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 param webImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 param deployApim = false
+param apimSkuCapacity = 1
+param apimPublisherEmail = 'apim-owner@example.invalid'
+param apimPublisherName = 'Product Support Agent'

@@ -12,10 +12,16 @@ dependencies = [
     "defusedxml>=0.7.1,<1",
     "fastapi>=0.115,<1",
     "httpx>=0.28,<1",
+    "opentelemetry-exporter-otlp-proto-http>=1.30,<2",
+    "opentelemetry-instrumentation-fastapi>=0.51b0,<1",
+    "opentelemetry-instrumentation-httpx>=0.51b0,<1",
+    "opentelemetry-sdk>=1.30,<2",
+    "azure-monitor-opentelemetry-exporter>=1.0.0b40,<2",
     "pydantic-settings>=2.7,<3",
     "pymongo>=4.10,<5",
     "python-dotenv>=1.0,<2",
     "uvicorn[standard]>=0.34,<1",
+    "opentelemetry-instrumentation-logging>=0.51b0,<1",
 ]
 
 [dependency-groups]
@@ -24,7 +30,9 @@ dev = [
     "mypy>=1.13,<2",
     "pip-audit>=2.7,<3",
     "pytest>=9.0.3,<10",
+    "pyyaml>=6,<7",
     "ruff>=0.9,<1",
+    "types-pyyaml>=6,<7",
     "types-defusedxml>=0.7,<1",
 ]
 

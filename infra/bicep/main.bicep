@@ -62,10 +62,22 @@ param apiImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:la
 @maxLength(512)
 param webImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 
-@description('Deploy the optional API Management service. Keep false for the demo.')
+@description('Deploy the classic API Management service in external VNet mode. Off by default; it adds a Developer or Premium instance with a monthly cost.')
 param deployApim bool = false
 
+@description('Premium scale units; ignored for Developer.')
+@minValue(1)
+@maxValue(10)
+param apimSkuCapacity int = 1
+
+@description('API Management publisher e-mail. Replace the placeholder before deploying.')
+param apimPublisherEmail string = 'apim-owner@example.invalid'
+
+@description('API Management publisher name.')
+param apimPublisherName string = 'Product Support Agent'
+
 var resourceGroupName = 'rg-psa-${environment}-cac-${instance}'
+var resolvedApimSku = environment == 'prd' ? 'Premium' : 'Developer'
 var tags = {
   application: 'product-support-agent'
   costCenter: costCenter
@@ -96,6 +108,7 @@ module network 'modules/network.bicep' = {
     instance: instance
     location: location
     tags: tags
+    deployApim: deployApim
   }
   dependsOn: [
     resourceGroup
@@ -140,6 +153,7 @@ module identity 'modules/identity.bicep' = {
     location: location
     keyVaultName: platform.outputs.keyVaultName
     registryName: platform.outputs.registryName
+    applicationInsightsName: platform.outputs.applicationInsightsName
     tags: tags
   }
 }
@@ -156,6 +170,9 @@ module containerApps 'modules/container-apps.bicep' = {
     logAnalyticsWorkspaceId: platform.outputs.logAnalyticsWorkspaceId
     logAnalyticsCustomerId: platform.outputs.logAnalyticsCustomerId
     logAnalyticsSharedKey: platform.outputs.logAnalyticsSharedKey
+    applicationInsightsConnectionString: platform.outputs.applicationInsightsConnectionString
+    apiIdentityClientId: identity.outputs.apiIdentityClientId
+    ingestionIdentityClientId: identity.outputs.ingestionIdentityClientId
     keyVaultUri: platform.outputs.keyVaultUri
     registryLoginServer: platform.outputs.registryLoginServer
     apiIdentityId: identity.outputs.apiIdentityId
@@ -180,10 +197,17 @@ module apim 'modules/apim.bicep' = if (deployApim) {
     instance: instance
     location: location
     tags: tags
+    skuName: resolvedApimSku
+    skuCapacity: apimSkuCapacity
+    subnetId: network.outputs.apimSubnetId
+    publicIpAddressId: network.outputs.apimPublicIpId
+    publisherEmail: apimPublisherEmail
+    publisherName: apimPublisherName
+    applicationInsightsId: platform.outputs.applicationInsightsId
+    applicationInsightsConnectionString: platform.outputs.applicationInsightsConnectionString
+    logAnalyticsWorkspaceId: platform.outputs.logAnalyticsWorkspaceId
+    backendUrl: 'https://${containerApps.outputs.apiAppFqdn}'
   }
-  dependsOn: [
-    resourceGroup
-  ]
 }
 
 output resourceGroupName string = resourceGroupName
@@ -192,3 +216,4 @@ output containerAppsEnvironmentName string = containerApps.outputs.environmentNa
 output apiContainerAppName string = containerApps.outputs.apiAppName
 output webContainerAppName string = containerApps.outputs.webAppName
 output ingestionJobName string = containerApps.outputs.ingestionJobName
+output apimSku string = deployApim ? resolvedApimSku : 'not deployed'

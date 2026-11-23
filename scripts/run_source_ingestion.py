@@ -45,6 +45,12 @@ from product_support_agent.source_ingestion import (
     SourceIngestionWorker,
 )
 from product_support_agent.sources import load_source_map
+from product_support_agent.telemetry import (
+    TelemetrySettings,
+    configure_telemetry,
+    record_ingestion_pages,
+    tracer,
+)
 
 LEASE_NAME = "source-ingestion"
 
@@ -153,10 +159,24 @@ async def _run(args: argparse.Namespace, settings: Settings) -> int:
                 fail_fast_consecutive_failures=settings.source_fail_fast_consecutive_failures,
             ),
         )
-        report = await worker.run(
-            args.product,
-            force=args.force,
-            discover_only=args.discover_only,
+        with tracer().start_as_current_span("psa.ingestion.run") as span:
+            span.set_attribute("psa.ingestion.search_indexing", provider is not None)
+            report = await worker.run(
+                args.product,
+                force=args.force,
+                discover_only=args.discover_only,
+            )
+            span.set_attribute("psa.ingestion.requests", report.requests)
+            span.set_attribute("psa.ingestion.products", len(report.products))
+            span.set_attribute("psa.ingestion.stopped_reason", str(report.stopped_reason))
+        record_ingestion_pages(
+            {
+                "indexed": sum(product.pages_indexed for product in report.products),
+                "unchanged": sum(product.pages_unchanged for product in report.products),
+                "skipped_fresh": sum(product.pages_skipped_fresh for product in report.products),
+                "failed": sum(product.pages_failed for product in report.products),
+                "removed": sum(product.pages_removed for product in report.products),
+            }
         )
     finally:
         state.release_lease(LEASE_NAME, holder)
@@ -182,7 +202,12 @@ async def _run(args: argparse.Namespace, settings: Settings) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(sys.argv[1:] if argv is None else argv)
-    return asyncio.run(_run(args, Settings()))
+    telemetry = configure_telemetry(TelemetrySettings(), service_name="product-support-ingestion")
+    try:
+        return asyncio.run(_run(args, Settings()))
+    finally:
+        # A short-lived job must flush its batches before the process exits.
+        telemetry.shutdown()
 
 
 if __name__ == "__main__":

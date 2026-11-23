@@ -86,6 +86,10 @@ output logAnalyticsWorkspaceId string = logAnalyticsWorkspace.id
 output logAnalyticsCustomerId string = logAnalyticsWorkspace.properties.customerId
 @secure()
 output logAnalyticsSharedKey string = logAnalyticsWorkspace.listKeys().primarySharedKey
+output applicationInsightsId string = applicationInsights.id
+output applicationInsightsName string = applicationInsights.name
+@secure()
+output applicationInsightsConnectionString string = applicationInsights.properties.ConnectionString
 output keyVaultId string = keyVault.id
 output keyVaultName string = keyVault.name
 output keyVaultUri string = keyVault.properties.vaultUri
