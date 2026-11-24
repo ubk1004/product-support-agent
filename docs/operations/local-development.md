@@ -1,177 +1,185 @@
 ---
-title: Local Development Runbook
-description: Run the product support demo locally with Podman Compose
+title: Local Development Guide
+description: Set up, run, ingest, test, and debug the Product Support Agent on a developer machine with Podman Compose
 author: Udaybhanu Karmakar
-ms.date: 2026-11-22
+ms.date: 2026-11-23
 ms.topic: how-to
 keywords:
   - local development
   - Podman
   - Next.js
   - FastAPI
+estimated_reading_time: 9
 ---
 
-This runbook starts the local demo against the existing Microsoft Foundry and
-Azure AI Search services. The browser talks only to Next.js; Next.js calls
-FastAPI over the Compose network. No query or response history is stored.
+This guide gets the whole application running on your machine and shows how to
+work on it. For the Azure environment, see the
+[cloud setup guide](../../infra/README.md).
 
-## Prerequisites and environment
+## What runs where
+
+Five containers run in Podman Compose, with every published port bound to
+`127.0.0.1`:
+
+| Service | Port | Purpose |
+|---|---|---|
+| `web` | 3000 | Next.js chat interface and coverage page |
+| `api` | 8000 | FastAPI service and the agent |
+| `mongodb` | 27017 | Canonical documents, fetch state, and ingestion records |
+| `azurite` | 10000, 10001 | Local Azure Storage emulator; the ingestion queue lives here |
+| `aspire-dashboard` | 18888 (UI), 4318 (OTLP) | Local traces, metrics, and logs |
+
+Two services are **not** local and must exist in Azure: a Microsoft Foundry
+resource with a chat and an embedding deployment, and an Azure AI Search
+service. The browser talks only to the web app; the web app calls the API from
+its server.
+
+## Prerequisites
 
 * Podman with a running machine and a working `podman compose` provider.
-* Network access to the user's Foundry and Azure AI Search endpoints.
-* Valid deployment and Search credentials in a local `.env` file.
-* `uv` 0.13.9 or later for running the evaluation and Python checks.
+* Git.
+* Foundry endpoint, key, and deployments: a chat deployment (the project uses
+  `gpt-5`) and an embedding deployment (`text-embedding-3-small`, 1,536
+  dimensions). Record the OpenAI-compatible endpoint ending in `/openai/v1`.
+* An Azure AI Search service with vector search, and its endpoint and an admin
+  key.
+* For development outside containers and for the checks: Python 3.11 or later
+  with [`uv`](https://docs.astral.sh/uv/) 0.13.9 or later, and Node.js 22 or
+  later.
 
-### Azure resources to prepare
+Creating Azure resources or model deployments costs money. Ask the project
+owner for existing ones, or follow Microsoft's guides:
 
-The local demo requires access to two Azure services:
+* [Create an Azure AI Search service](https://learn.microsoft.com/azure/search/search-create-service-portal)
+* [Create a Foundry project and deploy a model](https://learn.microsoft.com/azure/foundry/tutorials/quickstart-create-foundry-resources)
 
-* Microsoft Foundry with a chat deployment (`gpt-5`) and an embedding
-  deployment (`text-embedding-3-small`). Record the OpenAI-compatible endpoint,
-  API key, and exact deployment names.
-* Azure AI Search with a service endpoint and admin key for server-side index
-  creation, indexing, and retrieval. The indexing script creates the versioned
-  `product-support-demo-*` index; live tests use a separate
-  `product-support-test-*` index.
-
-Vector search is supported across current Search tiers, but quotas, capacity,
-pricing, and other features differ. Check the current service limits and costs.
-This project did not verify semantic ranking availability. MongoDB and Azurite
-run locally in Compose. The API currently uses an in-memory queue, so Azurite
-is not connected to the active catalog workflow. No Azure Storage account,
-database, network, or application-hosting resources are required. See the
-[README Azure setup overview](../../README.md#azure-resources-for-a-local-only-demo)
-and the linked Microsoft setup guides there.
-
-Creating Azure resources, changing service tiers, or deploying new models may
-incur spend and requires the authorization described in
-[ADR-0007](../architecture/decisions/adr-0007-demo-delivery-mode.md).
-
-From a clean checkout, copy `.env.example` once, then fill in the existing
-deployment and Search values locally. Do not overwrite an existing `.env`:
+## 1. Configure
 
 ```powershell
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-Required settings in `.env` are:
+Edit `.env` and set:
 
-* `AZURE_OPENAI_ENDPOINT` (OpenAI-compatible endpoint ending in `/openai/v1`),
-  `AZURE_OPENAI_API_KEY`, and `AZURE_OPENAI_CHAT_DEPLOYMENT`.
-* `AZURE_OPENAI_EMBEDDING_ENDPOINT` and
-  `AZURE_OPENAI_EMBEDDING_DEPLOYMENT`.
-* `AZURE_AI_SEARCH_ENDPOINT` and `AZURE_AI_SEARCH_API_KEY`.
-* `PRODUCT_SUPPORT_SEARCH_EMBEDDING_MODEL_VERSION`,
-  `PRODUCT_SUPPORT_SEARCH_EMBEDDING_DIMENSIONS` (`1536`), and
-  `PRODUCT_SUPPORT_SEARCH_DEMO_INDEX_BASE` (`product-support-demo`).
-* `PRODUCT_SUPPORT_MONGODB_URI` may remain
-  `mongodb://127.0.0.1:27017` in the host `.env`; Compose overrides it inside
-  the API container with `mongodb://mongodb:27017`.
+| Setting | Value |
+|---|---|
+| `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_EMBEDDING_ENDPOINT` | Foundry OpenAI-compatible endpoint, ending in `/openai/v1` |
+| `AZURE_OPENAI_API_KEY` | Foundry key |
+| `AZURE_OPENAI_CHAT_DEPLOYMENT`, `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` | Exact deployment names |
+| `AZURE_AI_SEARCH_ENDPOINT`, `AZURE_AI_SEARCH_API_KEY` | Search endpoint and admin key |
+| `PRODUCT_SUPPORT_SEARCH_EMBEDDING_DIMENSIONS` | `1536` for `text-embedding-3-small` |
 
-Chat requests do not include a temperature parameter because the gpt-5
-deployment rejects it. Query/response retention is not implemented and
-remains off.
+Leave the rest at their defaults; they are listed in the
+[configuration reference](configuration-reference.md). Do not commit `.env`.
+Compose gives `.env` only to the API container and overrides the database,
+queue, and file paths for the container network. Secrets are never baked into
+an image.
 
-Compose passes `.env` only to the API service using `env_file`; secrets are not
-baked into either image. The web service receives only
-`PRODUCT_SUPPORT_API_BASE_URL=http://api:8000`. The API image contains the
-approved manifest and source map JSON files, not the rest of `docs/`.
-
-## Start the demo
-
-Start the Podman machine only if it is stopped:
+## 2. Start
 
 ```powershell
 podman machine list
-# If it is not running:
+# If the machine is stopped:
 podman machine start
-```
-
-From the repository root, one command builds and starts MongoDB, Azurite (the
-ingestion queue), the Aspire dashboard (OpenTelemetry), the API, and the web
-app. Health checks gate startup order, and published ports bind only to
-loopback:
-
-```powershell
 podman compose up --build -d
 ```
 
-Open `http://127.0.0.1:3000`. The coverage page reports the 100-product
-manifest, the 10 products with approved public sources, and the current
-indexed-page count. The API health endpoint is `http://127.0.0.1:8000/healthz`;
-coverage metadata is at `http://127.0.0.1:8000/catalog/coverage`. The browser
-does not call FastAPI directly.
+Wait until `podman compose ps` shows all services healthy, then open:
 
-An existing local database volume may already contain the 300 canonical
-pages ingested for the 10 covered products. A new empty MongoDB volume needs a
-bounded ingestion and indexing pass before chat can answer:
+| URL | What you see |
+|---|---|
+| <http://127.0.0.1:3000> | The chat interface and the coverage of the 100-product demo catalog |
+| <http://127.0.0.1:8000/healthz> | API health |
+| <http://127.0.0.1:8000/catalog/coverage> | Coverage metadata as JSON |
+| <http://127.0.0.1:8000/docs> | API reference (FastAPI) |
+| <http://127.0.0.1:18888> | Aspire dashboard |
+
+## 3. Ingest the documentation
+
+A new MongoDB volume is empty, so the agent has nothing to answer from until a
+queue-driven ingestion run has finished. Run these inside the API container
+with `python`, not `uv run`: the image runs as a non-root user with no
+writable uv cache.
 
 ```powershell
 podman compose run --rm api python scripts/run_queue_ingestion.py run
 podman compose run --rm api python scripts/run_queue_ingestion.py status
 ```
 
-`run` queues one message per manifest product, then works through the queue one
-product at a time, embedding and indexing each product's pages into Azure AI
-Search and recording its outcome in MongoDB. `status` prints the run and one line
-per product. The same data is at `http://127.0.0.1:8000/ingestion/runs/latest`.
-Use `enqueue` and `work` separately to queue a run now and process it later, and
-`--product <id>` to limit a run. Run commands with `python`, not `uv run`: the
-image runs as a non-root user without a writable uv cache.
+`run` puts one message per manifest product on the `product-ingestion` queue,
+then works through them one at a time. For each product it fetches the pages in
+the [source map](phase-3-source-map-v1.json), embeds and indexes them in Azure
+AI Search (creating the versioned `product-support-demo-*` index on first use),
+and records an outcome. A complete run reports 10 products `success` and 90
+`skipped` with `no_public_source`. Pages fetched in the last 24 hours are
+skipped, so repeating the command is cheap. The same status is at
+<http://127.0.0.1:8000/ingestion/runs/latest>.
 
-Ingestion uses only
-[`phase-3-source-map-v1.json`](./phase-3-source-map-v1.json), the configured
-request budget, robots policy, freshness checks, and backoff. Indexing creates
-or updates the `product-support-demo-*` Search index from canonical MongoDB
-documents using the Foundry embedding deployment. These commands do not
-provision Azure resources. `scripts/index_documents.py` rebuilds the index from
-MongoDB, for example after an embedding model change.
+Useful variations:
 
-Traces, metrics, and logs from the web app, API, and ingestion job are at
-`http://127.0.0.1:18888`. They hold metadata only, never question or answer
-text, and are cleared when the dashboard container restarts.
+| Goal | Command |
+|---|---|
+| Queue a run now, process it later | `... run_queue_ingestion.py enqueue`, then `... work` |
+| One product only | add `--product <id>` |
+| Ignore freshness and backoff | add `--force` (needs the product owner's approval) |
+| Store pages in MongoDB only, skip embeddings and Search | add `--repository-only` |
+| Rebuild the Search index from MongoDB, for example after an embedding model change | `python scripts/index_documents.py` |
+| Run the source worker without the queue | `python scripts/run_source_ingestion.py` |
+
+Ingestion makes requests to real public sites. The worker obeys `robots.txt`, a
+request budget (400 per run by default), a one-second gap between requests to a
+host, and backoff, so do not bypass it. Only the hosts in the source map are
+contacted.
+
+## 4. Use and check the application
 
 Ask a question in the web page and optionally filter to an indexed product.
-Answers are plain text; citation links come from retrieved evidence. If no
-indexed evidence answers a question, the UI shows
-“No indexed documentation answers this.” Do not assume products without an
-approved source are supported.
+Answers are plain text with numbered source links, and every link comes from
+retrieved evidence. If nothing indexed answers, the assistant says it could not find the answer in the indexed documentation. The 90 products
+without a source are listed as not covered.
 
-## Evaluation
+Traces, metrics, and logs for the web app, API, and ingestion job are in the
+Aspire dashboard. They contain metadata only. The dashboard keeps them in
+memory, so they disappear when its container restarts.
 
-The versioned set contains 15 answerable questions across the 10 covered
-products and 3 unanswerable questions. The runner queries hybrid retrieval and
-the local API, then writes metrics and per-case outcomes only; it does not
-write question or response text to the report.
+## Create or replace the demo catalog (rare)
+
+The catalog is the committed
+[`phase-2-product-manifest-v1.json`](phase-2-product-manifest-v1.json). To draw
+a new sample from the OpenText feed (needs network access to `my.opentext.com`;
+it refuses to overwrite an existing file without `--replace`):
+
+```powershell
+uv run python scripts/create_manifest.py --manifest-version opentext-YYYY-MM-DD-v2 --output docs/operations/manifest-new.json
+```
+
+A new manifest changes which products are queued and shown. Adding a product
+that has documentation also needs an entry in the source map, and both changes
+need the product owner's approval.
+
+## Evaluate answer quality
+
+The offline evaluation runs 21 questions (15 answerable, 6 that should be
+refused) through retrieval and the running API, and uses a model to judge
+whether each cited page supports the answer. It needs Compose healthy, a
+completed ingestion, and the `.env` values above.
 
 ```powershell
 uv sync --all-groups
-uv run python scripts/run_evaluation.py --api-url http://127.0.0.1:8000
+uv run python scripts/run_evaluation.py --api-url http://127.0.0.1:8000 --report evaluation-local.md
 ```
 
-Results are recorded in
-[`phase-6-evaluation-v2.md`](./phase-6-evaluation-v2.md). Semantic reranking
-was not enabled because the Search service tier and billing plan could not be
-verified; no service setting was changed.
+Without `--report` the command overwrites the committed
+[evaluation report](phase-6-evaluation-v2.md). The report holds metrics only,
+never question or answer text. Results vary between runs, so compare ranges and
+not single numbers.
 
-## Stop and preserve local data
-
-Stop the containers gracefully while keeping the named data volumes:
-
-```powershell
-podman compose stop --timeout 30
-```
-
-Restart them with `podman compose start`. To remove project containers while
-preserving data, use `podman compose down --timeout 30`. Do not add `--volumes`
-unless you intentionally want to delete the MongoDB and Azurite data. Leave
-containers from other projects alone.
-
-## Routine validation
+## Run the checks
 
 From the repository root:
 
 ```powershell
+uv sync --all-groups
 uv run ruff format --check .
 uv run ruff check .
 uv run mypy src/product_support_agent scripts
@@ -179,19 +187,49 @@ uv run pytest
 uv run bandit -q -r src scripts
 ```
 
-In `apps/web`:
+`pytest` is offline by default. Tests marked `live` call real Azure AI Search
+and create a disposable `product-support-test-*` index; run them with
+`uv run pytest -m live`.
+
+For the web app, from `apps/web`:
 
 ```powershell
+npm ci
 npm run lint
 npm run typecheck
 npm run build
 ```
 
-## Production-only
+To run the web app on the host against a containerised API, set
+`PRODUCT_SUPPORT_API_BASE_URL=http://127.0.0.1:8000` and run `npm run dev` in
+`apps/web`.
 
-This runbook is for a local demo, not a public or production service. Identity,
-private networking, rate and cost controls, reviewed evaluation, full
-accessibility and red-team audits, query/response retention approval,
-observability export, image provenance, and MongoDB backup/restore remain
-documented gaps in the
-[production gap register](./production-gap-register.md).
+## Stop and clean up
+
+Stop the containers and keep the data:
+
+```powershell
+podman compose stop --timeout 30
+podman compose start
+```
+
+`podman compose down --timeout 30` removes the containers but keeps the named
+volumes. Add `--volumes` only when you want to delete the MongoDB and Azurite
+data, which means ingesting again.
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| The page says "Demo coverage could not be loaded" | The API is not healthy yet, or MongoDB is empty; check `podman compose ps` and `podman compose logs api` |
+| Every question gets the "couldn't find this in the indexed documentation" refusal | Ingestion has not run or the index name or dimensions do not match; run `status` |
+| Chat shows "The assistant is temporarily unavailable" | Foundry rejected the call (often 429 throttling) or Search is unreachable; check the key, endpoint, and deployment capacity |
+| `another ingestion run holds the lease` | A previous run was killed; follow the [runbook](../architecture/support-ownership.md#runbooks) |
+| Queue commands fail with an API version error | The Azurite image and `PRODUCT_SUPPORT_QUEUE_API_VERSION` are out of step; Compose pins `2026-06-06` for Azurite 3.38 |
+| API refuses to start with an environment error | `PRODUCT_SUPPORT_ENVIRONMENT` must be `local`, `test`, or `production` |
+
+## Before sharing the demo
+
+This setup is for local use. It has no user sign-in, so keep it on
+`127.0.0.1`. The controls that a shared or production service needs are in the
+[production gap register](production-gap-register.md).

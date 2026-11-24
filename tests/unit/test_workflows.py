@@ -166,11 +166,40 @@ def test_files_the_workflows_build_exist() -> None:
 
 def test_infra_deploy_refuses_placeholders_and_needs_a_successful_what_if() -> None:
     infra = load(WORKFLOW_DIR / "infra.yml")
-    deploy = infra["jobs"]["deploy"]
-    guard = next(step for step in steps(deploy) if "placeholder" in step["name"].lower())
 
-    assert "example" in guard["run"] and "placeholder" in guard["run"]
-    assert "needs.what-if.result == 'success'" in str(deploy["if"])
+    for name in ("what-if", "deploy"):
+        job_steps = steps(infra["jobs"][name])
+        guard = next(i for i, step in enumerate(job_steps) if "placeholder" in step["name"].lower())
+        login = next(i for i, step in enumerate(job_steps) if "azure/login" in step.get("uses", ""))
+        assert "scripts/prepare_deployment.py" in job_steps[guard]["run"]
+        assert guard < login, f"{name}: placeholders must be refused before signing in to Azure"
+    assert "needs.what-if.result == 'success'" in str(infra["jobs"]["deploy"]["if"])
+    assert (ROOT / "scripts" / "prepare_deployment.py").exists()
+
+
+def test_infra_deploys_in_two_stages_with_the_region_from_the_parameter_file() -> None:
+    infra = load(WORKFLOW_DIR / "infra.yml")
+    stage = triggers(infra)["workflow_dispatch"]["inputs"]["stage"]
+    deploy_run = " ".join(step.get("run", "") for step in steps(infra["jobs"]["deploy"]))
+
+    assert stage["options"] == ["platform", "workloads"]
+    assert '--location "$LOCATION"' in deploy_run
+    assert "canadacentral" not in (WORKFLOW_DIR / "infra.yml").read_text(encoding="utf-8")
+
+
+def test_private_registry_access_runs_inside_the_virtual_network() -> None:
+    app = load(WORKFLOW_DIR / "app.yml")
+    configured = set(
+        yaml.safe_load((ROOT / ".github" / "actionlint.yaml").read_text())["self-hosted-runner"][
+            "labels"
+        ]
+    )
+
+    for name in ("publish", "deploy"):
+        labels = app["jobs"][name]["runs-on"]
+        assert "self-hosted" in labels, f"{name} must run on a runner inside the VNet"
+        assert any("-vnet" in str(label) for label in labels)
+    assert {"dev-vnet", "tst-vnet", "prd-vnet"} <= configured
 
 
 def test_deploy_environment_is_the_chosen_environment() -> None:

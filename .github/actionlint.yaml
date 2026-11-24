@@ -1,3 +1,7 @@
+# Labels of the self-hosted runners inside each environment's virtual network. The container
+# registry is private, so image publishing and deployment checks run on these runners.
 self-hosted-runner:
   labels:
     - dev-vnet
+    - tst-vnet
+    - prd-vnet

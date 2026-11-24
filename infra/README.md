@@ -1,237 +1,322 @@
 ---
-title: Azure Infrastructure Design
-description: Bicep architecture, live Azure verification results, and CI/CD bootstrap for the local-first demo
+title: Cloud Environment Setup and Testing Guide
+description: How to create, deploy, test, and remove an Azure environment for the Product Support Agent with Bicep and GitHub Actions
 author: Udaybhanu Karmakar
 ms.date: 2026-11-23
-ms.topic: reference
+ms.topic: how-to
 keywords:
   - Azure
   - Bicep
-  - infrastructure
+  - Container Apps
   - GitHub Actions
+  - API Management
+estimated_reading_time: 14
 ---
 
-The Bicep in this directory was deployed to an isolated Azure resource group
-and exercised with the real application images, cloud ingestion, and chat.
-Production gates remain recorded in the Phase 7 "Production-only" note and
-the [production gap register](../docs/operations/production-gap-register.md).
+This guide takes you from an empty Azure subscription to a running environment
+that you can test. It covers what the template creates, what you must prepare,
+how to deploy by pipeline or by command line, how to test the result, and how
+to remove it. The design and its reasons are in the
+[solution architecture](../docs/architecture/architecture-overview.md) and
+[ADR-0010](../docs/architecture/decisions/adr-0010-azure-platform-and-api-management.md).
 
-## Status: written, validated, deployed
+## What gets created
 
-| Item | Written | Validated | Deployed |
-|---|---|---|---|
-| Network and platform | Yes | Bicep build, lint, parameter compilation, provider validation, and what-if | Yes, in the isolated test group |
-| Foundry account, project, GPT-5 and embeddings | Yes, optional (`deployFoundry`) | Chat and embedding calls succeeded; embeddings return 1,536 dimensions | Yes |
-| Data services | Yes | DocumentDB Free ready; five private endpoints approved; private DNS records present | Yes |
-| Identity and secret bootstrap | Yes | Three identities, seven scoped role assignments, and three secret names verified (metadata only) | Yes |
-| Container Apps | Yes | Real API and web revisions healthy; web to API to DocumentDB, Search, and Foundry verified | Yes |
-| Ingestion job (Container Apps job) | Yes. Runs `run_queue_ingestion.py run` against the private Storage Queue with managed identity; ingestion and poison queues are declared in Bicep | Executed in Azure: 10 of 10 products with an approved source succeeded | Yes |
-| API Management | Classic tier in external VNet mode: Developer for `dev` and `tst`, Premium for `prd`. Dedicated subnet, NSG, and static public IP; off in `dev` (`deployApim`) | Succeeded; gateway rejects missing keys with 401; policy and no-body diagnostics verified | Yes, Developer |
-| `infra`, `app`, and `validate` GitHub workflows | Yes | Checked offline by `tests/unit/test_workflows.py` (pinned actions, permissions, triggers, deployment gates); actionlint runs in CI; hosted runs not verified | No |
+One resource group per environment (`dev`, `tst`, or `prd`), named
+`rg-psa-<env>-<region>-<nn>`, containing:
 
-## Live verification
+| Layer | Resources |
+|---|---|
+| Network | Virtual network `10.20.0.0/16` with subnets for Container Apps, private endpoints, and API Management; an NSG per subnet; a NAT gateway for outbound traffic; private DNS zones |
+| Platform | Key Vault, Azure Container Registry (Premium, private), Log Analytics, Application Insights |
+| Data | Cosmos DB for MongoDB (or Azure DocumentDB Free), a Storage account with the `product-ingestion` and `product-ingestion-poison` queues, Azure AI Search (Basic), all with private endpoints |
+| Identity | User-assigned identities for the API, the ingestion job, and image pulls, with role assignments scoped to single resources |
+| AI (optional) | With `deployFoundry=true`: a Foundry account and project with `gpt-5` and `text-embedding-3-small` GlobalStandard deployments, and the three Key Vault secrets the apps read |
+| Workloads | A Container Apps environment with the web app (public), the API (internal), and the ingestion job (weekly, Sundays 02:00 UTC, or manual) |
+| Gateway (optional) | Classic API Management in external VNet mode: Developer for `dev` and `tst`, Premium for `prd` (`deployApim`) |
 
-The test environment is the resource group `rg-psa-tst-cae-01` (`tst`,
-instance `23`) in Canada East, with DocumentDB Free in Canada Central.
+Resource names follow `{type}-psa-{env}-{region}-{nn}`, with a short
+deterministic suffix on globally unique names. Every resource is tagged with
+`application`, `costCenter`, `environment`, `managedBy`, and `owner`.
 
-Verified:
+## Before you start
 
-* The full stack deploys, including Foundry, both model deployments, Search,
-  Key Vault, ACR, storage, telemetry, networking, Container Apps, and APIM.
-* Both images build from the repository Containerfiles, pull from the private
-  registry, and run healthy with API port 8000 and web port 3000.
-* Cloud ingestion on the approved source map finished with 10 of 10 products
-  that have an approved source succeeded and 90 skipped as `no_public_source`,
-  with no failures or dead-lettered messages.
-* Through the deployed web route, chat returns grounded answers with citations
-  to the approved documentation host, handles a follow-up, refuses an off-topic
-  question and a fictional product with no citations, and returns HTTP 400 for
-  malformed input. Product coverage renders on the home page.
-* Retention stayed off, and no query or response text was stored.
+### Tools
 
-Not verified:
+* Azure CLI with Bicep (`az bicep install`) and permission to run
+  `az deployment sub`.
+* Python 3.11 or later, to run `scripts/prepare_deployment.py`.
+* A GitHub repository with Actions enabled, if you deploy by pipeline.
 
-* An APIM request with a subscription key through to the API. The web app calls
-  the API directly and does not use APIM.
-* Retrieval and answer quality thresholds (`scripts/run_evaluation.py`).
-* A browser session. Checks used the deployed web route and rendered page.
-* Alerts and telemetry retention policy.
+### Azure access
 
-Lessons that still apply:
+The identity that deploys needs to create a resource group, resources, and role
+assignments at subscription scope. `Owner`, or `Contributor` plus
+`Role Based Access Control Administrator`, is enough. Narrow it for
+production.
 
-* Provider validation and what-if do not prove regional tier availability.
-  Canada East rejected DocumentDB Free at creation despite passing both, so
-  `documentDbLocation` places the Free cluster in Canada Central. There is no
-  paid fallback. The subscription also lacked Cosmos DB RU access in Canada East.
-* Updating the Foundry project and model deployments concurrently conflicts on
-  the parent account, so the template serializes those writes.
-* A Container Apps Consumption workload profile does not accept node
-  `minimumCount` or `maximumCount`.
-* The application accepts `local`, `test`, or `production` as its environment.
-  The template maps `prd` to `production` and every other environment to `test`.
-* Model capacity is a tokens-per-minute rate limit on pay-per-token
-  deployments. Capacity 1 allows 1,000 tokens per minute, which throttles chat
-  and ingestion with HTTP 429. The module defaults are 10 for GPT-5 and 20 for
-  embeddings; raise them for heavier use.
-* The registry is private, so images must be pushed from a runner or builder with
-  VNet access. Do not enable public access permanently.
-* Stopping an ingestion execution leaves its 6-hour lease in the
-  `ingestion_leases` collection (`source-ingestion`). Delete that document, or
-  wait for it to expire, before the next run.
-* GlobalStandard permits global model processing; locating the account in Canada
-  does not guarantee Canadian processing residency.
+### Capacity and region checks
 
-> [!WARNING]
-> The test resources are retained and continue to incur charges. A budget is not
-> an Azure spending cap. Obtain explicit approval before deleting them.
+Provider validation and what-if do **not** prove that a service is offered in a
+region. Check these before you deploy:
 
-### Known gaps
+* **Models.** `gpt-5` (2025-08-07) and `text-embedding-3-small` with the
+  GlobalStandard SKU, in the `location` you choose. GlobalStandard can process
+  prompts in any region, so it is not a data-residency control.
+* **Model capacity.** The defaults are 10 for `gpt-5` and 20 for embeddings (in
+  units of 1,000 tokens per minute). Capacity 1 throttles chat and ingestion
+  with HTTP 429.
+* **Cosmos DB for MongoDB** in the region. If your subscription cannot create
+  it there, or you want the free option, use `useDocumentDbFreeTier=true`
+  and a `documentDbLocation` where Azure DocumentDB Free is offered. That mode
+  has no paid fallback.
+* **API Management** (classic Developer or Premium) and **Container Apps** in
+  the region.
+* **Region token.** The names use `cac` for `canadacentral` and `cae` for
+  `canadaeast`. For any other region, set `locationAbbreviation` in the
+  parameter file.
 
-* API Management Developer was used for this isolated test only. The classic
-  Developer tier has no SLA and one unit; Premium is the production tier and is
-  billed per unit. Other environments still need a cost decision before enabling
-  it. First creation in VNet mode can take 45 minutes or more.
-  Callers authenticate with a subscription key; Entra ID sign-in (`validate-jwt`)
-  is a production gate.
-* When `deployFoundry=true`, the ARM secret bootstrap creates
+### Parameter files
+
+Each environment has `infra/bicep/parameters/<env>.bicepparam`. The committed
+files contain placeholders so that nothing deploys by accident. Replace at
+least:
+
+| Parameter | Meaning |
+|---|---|
+| `owner`, `costCenter` | Tag values |
+| `location` | Azure region |
+| `deployFoundry` | `true` to create Foundry and the model deployments; otherwise set `foundryEndpoint`, `foundryChatDeployment`, and `foundryEmbeddingDeployment` for an existing Foundry resource |
+| `useDocumentDbFreeTier`, `documentDbLocation` | Optional free Mongo-compatible store |
+| `deployApim`, `apimPublisherEmail`, `apimPublisherName` | Optional gateway and its publisher contact |
+| `instance` | Two-digit suffix, so that several copies of an environment can coexist |
+
+`scripts/prepare_deployment.py` refuses to continue while any required value is
+still a placeholder. The image parameters are set by the script from the commit
+SHA and are not edited by hand.
+
+### Secrets
+
+* `documentDbAdministratorPassword` (only with DocumentDB Free): keep the same
+  value for every deployment of the environment. Supply it as the
+  `DOCUMENTDB_ADMIN_PASSWORD` environment variable; never put it in a parameter
+  file or on a command line.
+* With `deployFoundry=false`, create the three Key Vault secrets yourself:
   `mongodb-connection-string`, `azure-ai-search-api-key`, and
-  `azure-openai-api-key` without exposing values as outputs. With an existing
-  Foundry endpoint (`deployFoundry=false`), provision these secret values
-  separately.
-* The ingestion job indexes into Search as it runs, so it receives the
-  embedding model version and dimensions (`embeddingModelVersion`,
-  `embeddingDimensions`) and the Foundry and Search settings. These must match
-  the embedding deployment or the index name will not match what the API reads.
-* Image publishing needs a self-hosted runner. The private registry is not
-  reachable from a GitHub-hosted runner. The workflow requires a runner labelled
-  `dev-vnet`; it has not been created.
-* The default Mongo-compatible store is RU-based Azure Cosmos DB for MongoDB.
-  `useDocumentDbFreeTier=true` selects Azure DocumentDB Free instead, requiring
-  a secure `documentDbAdministratorPassword` parameter and an available region.
-  This path has no paid fallback.
-* The API and ingestion job send OpenTelemetry traces to Application Insights
-  with their managed identities (Monitoring Metrics Publisher role), and API
-  Management logs requests without bodies. Alerts and a retention policy are not
-  configured.
+  `azure-openai-api-key`. The vault is private after the platform stage, so
+  create them from a machine inside the virtual network or while you
+  temporarily allow your own address.
 
-## Azure infrastructure design
+## Deploy in two stages
 
-The subscription-scope template creates the resource group, then provisions the
-network, platform, data, identity, and Container Apps modules in Canada Central
-by default. The separate smoke parameters target Canada East.
-`deployApim` defaults to `false`. The web app has external ingress, the API has
-internal ingress, private endpoints are linked to the VNet through private DNS,
-and the Container Apps subnet uses a NAT Gateway for outbound traffic. Foundry
-remains a public endpoint, either configured with parameters or created with
-`deployFoundry=true`.
+The apps cannot start until their images are in the container registry, and the
+registry is reachable only from inside the virtual network. So the template
+deploys twice with `deployWorkloads` switched off, then on:
 
-The Container Apps templates reference these Key Vault secret names. Use the
-optional ARM bootstrap or populate them separately before running workloads.
-Never commit secret values in Bicep or parameter files:
+1. **Platform** (`deployWorkloads=false`): network, platform, data, identity,
+   and optionally Foundry, the secrets, and the model deployments.
+2. **Publish images** from a runner inside the virtual network.
+3. **Workloads** (`deployWorkloads=true`): Container Apps, the ingestion job,
+   and, if enabled, API Management. API Management in VNet mode can take 45
+   minutes or more to create the first time.
 
-* `mongodb-connection-string`
-* `azure-ai-search-api-key`
-* `azure-openai-api-key`
+### Option A: GitHub Actions
 
-The cloud image references and Foundry parameter values in
-`bicep/parameters/dev.bicepparam` are placeholders. The full template is
-not a separately deployable network slice.
+#### One-time setup per environment
 
-### Staged deployment test
+1. **Federated identity.** Create an Entra application and service principal
+   with a federated credential:
 
-The [smoke parameters](./bicep/smoke.bicepparam) select `tst`, instance `23`,
-Canada East, a new Foundry account, DocumentDB Free in Canada Central, APIM
-Developer, port 80 hello-world images, and a Manual ingestion job.
-`documentDbLocation` defaults to the stack's region, so the existing environment
-parameter files retain their behavior. Do not remove the Canada Central override
-without rechecking tier availability.
+   | Field | Value |
+   |---|---|
+   | Issuer | `https://token.actions.githubusercontent.com` |
+   | Audience | `api://AzureADTokenExchange` |
+   | Subject | `repo:<owner>/<repo>:environment:<env>` |
 
-The hello-world images test resource creation only and cannot run the ingestion
-command. To test the application, override `apiImage` and `webImage` with images
-pushed to the private registry and set `apiTargetPort` to 8000 and
-`webTargetPort` to 3000. Keep `scheduleIngestion=false` so ingestion runs only
-when started manually.
+   Create no client secret. Grant it the roles above on the subscription for
+   infrastructure deployment, and `AcrPush` and `Contributor` on the resource
+   group for application deployment, once the group exists.
+2. **GitHub environment.** Create a GitHub environment named `dev`, `tst`, or
+   `prd`. Add required reviewers to `prd`, and restrict deployment branches to
+   `main`.
+3. **Environment secrets:** `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`,
+   `AZURE_SUBSCRIPTION_ID`, and, with DocumentDB Free,
+   `DOCUMENTDB_ADMIN_PASSWORD`.
+4. **Environment variables**, after the platform stage has created the
+   resources: `ACR_NAME`, `RESOURCE_GROUP_NAME`, `API_CONTAINER_APP_NAME`,
+   `WEB_CONTAINER_APP_NAME`, and `INGESTION_JOB_NAME`. The names are in the
+   deployment outputs.
+5. **A self-hosted runner** inside the virtual network, with Docker and the
+   labels `self-hosted`, `linux`, `x64`, and `<env>-vnet` (for example
+   `tst-vnet`). The publish and deploy jobs run on it because the registry is
+   private. Provisioning the runner is outside this repository.
+6. **Branch protection** on `main` with the `Validate` checks required.
 
-Compile and validate before deploying:
+The registry name and the runner cannot exist until the platform stage has run,
+so the first platform deployment can be done from the command line (Option B)
+or from the workflow before steps 4 and 5.
 
-```powershell
-az bicep build --file infra\bicep\main.bicep --outfile .azure\smoke.template.json
-az bicep build-params --file infra\bicep\smoke.bicepparam --outfile .azure\smoke.parameters.json
-az bicep lint --file infra\bicep\main.bicep
+#### Pipelines
+
+| Workflow | Runs | What it does |
+|---|---|---|
+| `validate.yml` | Every pull request, and called by `app.yml` | Python 3.11 and 3.13 checks (Ruff, mypy, pytest, Bandit, `pip-audit`), web lint, type-check, build, and `npm audit`, actionlint, CodeQL, and gitleaks |
+| `infra.yml` | Pull requests and pushes that touch `infra/`, and manual runs | Builds and lints the Bicep for `dev`, `tst`, and `prd`. A manual run from `main` takes an environment and a stage, refuses placeholders, signs in with OIDC, runs a what-if, and then deploys. Deployment waits for the what-if to succeed and for any environment reviewers |
+| `app.yml` | Pushes to `main`, and manual runs | Validates, builds both images and checks that they run as non-root, then publishes images tagged with the commit SHA on a VNet runner. A manual run also updates the API, web app, and ingestion job to one image tag and checks that the API is running |
+
+Run them in this order for a new environment:
+
+1. Run **Infrastructure**: environment `<env>`, stage `platform`.
+2. Run **Application** from `main` with environment `<env>`: this builds and
+   publishes the images (on a push to `main` it publishes to `dev`).
+3. Run **Infrastructure**: stage `workloads`, with `image-tag` set to the commit
+   SHA that was published (the default is the current commit).
+4. Run **Application** with `image-tag` for later releases.
+
+### Option B: command line
+
+From the repository root, in a shell with `az` signed in:
+
+```bash
+ENV=tst
+STAGE=platform
+mkdir -p .azure/deploy
+az bicep build --file infra/bicep/main.bicep --outfile .azure/deploy/main.json
+az bicep build-params --file infra/bicep/parameters/$ENV.bicepparam --outfile .azure/deploy/compiled.json
+
+# Writes parameters.json, and secure.parameters.json when DocumentDB Free is used.
+# Refuses placeholders. For the workloads stage add:
+#   --image-tag <40-character commit SHA> --registry <registry name>
+export DOCUMENTDB_ADMIN_PASSWORD='<only with useDocumentDbFreeTier>'
+python scripts/prepare_deployment.py --compiled .azure/deploy/compiled.json \
+  --stage $STAGE --output-dir .azure/deploy
+
+LOCATION=<value printed as location=...>
+az deployment sub what-if --location $LOCATION --template-file .azure/deploy/main.json \
+  --parameters @.azure/deploy/parameters.json
+az deployment sub create  --location $LOCATION --name psa-$ENV-$STAGE \
+  --template-file .azure/deploy/main.json --parameters @.azure/deploy/parameters.json
 ```
 
-Supply `documentDbAdministratorPassword` through a secure local parameter
-source, never command-line plaintext or committed files. Preserve the same
-credential across redeployments. The `.azure` directory is git-ignored; keep
-compiled templates and parameter files with credentials there.
+When the script reports `secure_parameters=true`, add
+`@.azure/deploy/secure.parameters.json` as a second `--parameters` argument.
+The `.azure/` directory is git-ignored; delete the secure file when you finish.
 
-```powershell
-$subscription = '<subscription-id>'
-az deployment sub validate --subscription $subscription --location canadaeast --template-file .azure\smoke.template.json --parameters .azure\smoke.parameters.json deployWorkloads=false
-az deployment sub what-if --subscription $subscription --location canadaeast --template-file .azure\smoke.template.json --parameters .azure\smoke.parameters.json deployWorkloads=false
-az deployment sub create --subscription $subscription --location canadaeast --name '<unique-platform-deployment-name>' --template-file .azure\smoke.template.json --parameters .azure\smoke.parameters.json deployWorkloads=false
+Publish the images from a machine that can reach the private registry:
+
+```bash
+REGISTRY=<registry name>.azurecr.io
+TAG=$(git rev-parse HEAD)
+az acr login --name <registry name>
+docker build -f Containerfile -t $REGISTRY/product-support-api:$TAG .
+docker build -f apps/web/Containerfile -t $REGISTRY/product-support-web:$TAG apps/web
+docker push $REGISTRY/product-support-api:$TAG
+docker push $REGISTRY/product-support-web:$TAG
 ```
 
-After the platform succeeds, secret metadata checks pass, and scoped roles
-propagate, validate, review what-if, and deploy again with
-`deployWorkloads=true`. Verify revisions, network access, and APIM separately.
+Then run the `workloads` stage with `--image-tag $TAG --registry <registry name>`.
 
-## Naming
+## Test the environment
 
-Use `{type}-psa-{env}-{region}-{nn}` for resource names where Azure permits it.
-Resources with restricted character sets or shorter maximum lengths preserve
-the same project, environment, region, and instance tokens in a compact name.
-Global resource names include a short deterministic suffix.
+Use the deployment outputs for names (`az deployment sub show --name <name>
+--query properties.outputs`).
 
-| Name segment | Meaning | Example |
-|---|---|---|
-| `{type}` | Azure resource type abbreviation | `vnet`, `cae`, `pe` |
-| `psa` | Product Support Agent | `psa` |
-| `{env}` | Environment | `dev` |
-| `{region}` | Region token; `cac` for Canada Central, `cae` for Canada East | `cae` |
-| `{nn}` | Two-digit instance number | `01` |
+1. **Resources are healthy.** All deployments report `Succeeded`; the API and
+   web revisions are `Running`:
 
-## Mandatory tags
+   ```bash
+   az containerapp show -g <rg> -n <api-app> --query properties.runningStatus -o tsv
+   az containerapp show -g <rg> -n <web-app> --query properties.configuration.ingress.fqdn -o tsv
+   ```
+2. **Run ingestion** and wait for it to finish:
 
-| Tag | Purpose | Template value |
-|---|---|---|
-| `application` | Workload identification | `product-support-agent` |
-| `costCenter` | Cost attribution | `costCenter` parameter (`TBD` placeholder) |
-| `environment` | Environment isolation | `environment` parameter |
-| `managedBy` | Infrastructure ownership | `bicep` |
-| `owner` | Operational ownership | `owner` parameter (`team-placeholder`) |
+   ```bash
+   az containerapp job start -g <rg> -n <ingestion-job>
+   az containerapp job execution list -g <rg> -n <ingestion-job> -o table
+   ```
 
-## One-time GitHub OIDC bootstrap
+   The job creates the Search index on first use. A complete run reports 10
+   products `success` and 90 `skipped` with `no_public_source`. Status is also
+   available from the API (`GET /ingestion/runs/latest`) from inside the
+   network.
+3. **Use the web app.** Open the web app's address. The home page lists the 100
+   catalog products with the indexed ones first. Ask a documentation question
+   about an indexed product and check that the answer has citations that open
+   public documentation pages. Ask about an uncovered product, or an off-topic
+   question, and check for the standard refusal.
+4. **Check telemetry.** In Application Insights, search for traces from the web
+   app and API; one chat request is one trace across both services. Confirm
+   that no span contains question or answer text.
+5. **Test API Management** (when `deployApim=true`). The API requires a subscription key but the template does not create one.
+   In the portal, add a subscription scoped to the `Product Support API`, then:
 
-1. Register an Entra application and service principal for this repository's
-   deployment workflows. Create a federated credential with issuer
-   `https://token.actions.githubusercontent.com`, audience
-   `api://AzureADTokenExchange`, and subject
-   `repo:<OWNER>/<REPO>:environment:dev`. Do not create a client secret.
-2. Grant the application only the permissions required to create the target
-   resource group and deploy into the subscription. For image publishing, grant
-   `AcrPush` at the ACR scope only. Review and narrow deployment permissions
-   before production.
-3. Configure the GitHub `dev` environment and add these repository secrets by
-   name; do not put their values in this file:
-   `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`.
-4. Add these repository variables by name for the application workflow:
-   `ACR_NAME`, `RESOURCE_GROUP_NAME`, `API_CONTAINER_APP_NAME`,
-   `WEB_CONTAINER_APP_NAME`, `INGESTION_JOB_NAME`.
+   ```bash
+   curl -s -X POST "https://<gateway-host>/product-support/chat" \
+     -H "Ocp-Apim-Subscription-Key: <key>" -H "Content-Type: application/json" \
+     -d '{"message": "What does <product> support?"}'
+   ```
 
-The `dev` environment protects image publication, what-if, and manual
-deployment. The `infra` workflow deploys only on `workflow_dispatch`; the
-`app` workflow deploys Container Apps only on `workflow_dispatch` and publishes
-images only from `main`. Its publish job requires a self-hosted Linux runner
-labelled `dev-vnet`, with Docker and private VNet access; a hosted GitHub runner
-cannot push to the private ACR. Configure environment reviewers and the
-federated subject to match the repository before enabling OIDC.
+   A request without the key must return 401. Exceeding 30 calls per minute per
+   key must return 429.
+6. **Run the evaluation** (optional). The runner calls the API's `/chat`
+   directly and also queries Search and Foundry with the keys in `.env`, so run
+   it from a machine inside the virtual network:
+   `python scripts/run_evaluation.py --api-url <internal API URL> --report <file>`.
+   Pass `--report` so that the committed report is not overwritten.
 
-## Validation boundary
+## Troubleshooting
 
-Run `az bicep build --file infra/bicep/main.bicep`,
-`az bicep build-params --file infra/bicep/parameters/dev.bicepparam`, and
-`az bicep lint --file infra/bicep/main.bicep` before review. The workflows
-repeat static checks. Provider validation and what-if are necessary but do not
-prove regional tier availability, as the live database attempt demonstrated.
-Further deployment and resource changes require the applicable user approval.
+| Symptom | Cause and fix |
+|---|---|
+| Deployment succeeds in validation but fails creating DocumentDB Free or a model deployment | Validation does not check regional availability. Choose a supported `documentDbLocation` or `location`, or use Cosmos DB for MongoDB |
+| Chat or ingestion returns 429 or a 502 | Model capacity is too low. Raise the `gpt-5` and embedding capacity |
+| `workloads` stage fails: image not found | The images for that tag are not in the registry. Publish first and use the same tag |
+| Publish job waits for a runner | No runner has the `<env>-vnet` label |
+| Ingestion exits with "another ingestion run holds the lease" | A stopped run left its lease. See the [runbook](../docs/architecture/support-ownership.md#runbooks) |
+| Concurrent Foundry project and model deployment errors | The template already serialises them; re-run the stage |
+| Container Apps Consumption profile rejects node counts | Do not set `minimumCount` or `maximumCount` on the Consumption profile |
+| The API rejects its environment | The application accepts `local`, `test`, or `production`; the template maps `prd` to `production` and everything else to `test` |
+| Key Vault or Foundry names are "in use" after a delete | Soft-deleted resources hold the name. Purge them (below) |
+
+## Cost
+
+Resources that bill while they exist include API Management (Developer is
+about the cost of a small VM; Premium is far higher), Azure AI Search Basic,
+the Premium registry, the NAT gateway, Container Apps replicas, and Foundry
+usage. Check current prices for your region and set a budget with alerts. An
+Azure budget is not a spending cap.
+
+## Remove an environment
+
+```bash
+az group delete --name <rg> --yes --no-wait
+```
+
+Then purge soft-deleted resources so the names can be reused:
+
+```bash
+az keyvault purge --name <key-vault-name>
+az cognitiveservices account purge --location <location> --resource-group <rg> --name <foundry-account>
+az apim deletedservice purge --service-name <apim-name> --location <location>
+```
+
+## Validate the templates offline
+
+Run these before a review. They need no Azure sign-in:
+
+```bash
+az bicep build --file infra/bicep/main.bicep --stdout > /dev/null
+az bicep build-params --file infra/bicep/parameters/dev.bicepparam --stdout > /dev/null
+az bicep lint --file infra/bicep/main.bicep
+python -m pytest tests/unit/test_workflows.py tests/unit/test_prepare_deployment.py
+```
+
+The `infra.yml` workflow repeats the Bicep checks for all three environments.
+
+## Smoke parameters
+
+`infra/bicep/smoke.bicepparam` is a ready-made parameter set for testing the
+template itself: `tst`, a new Foundry account, DocumentDB Free, API Management,
+public hello-world images on port 80, and a manual ingestion job. Use it only
+for template tests. To test the application, deploy with real images and
+`apiTargetPort` 8000 and `webTargetPort` 3000, as the pipelines do.

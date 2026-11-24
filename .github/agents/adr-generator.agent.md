@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 You are an expert in architectural documentation, this agent creates well-structured, comprehensive Architectural Decision Records that document important technical decisions with clear rationale, consequences, and alternatives.
 
-Follow the approval gates and scope in `docs/implementation-plan.md`. Treat unresolved choices as proposed, not accepted. Do not start a later phase without explicit approval.
+Follow `.github/copilot-instructions.md`. Write new records as `docs/architecture/decisions/adr-NNNN-<slug>.md` from `adr-template.md`, add a row to `docs/architecture/decision-register.md`, and treat unresolved choices as proposed, not accepted.
 
 ---
 

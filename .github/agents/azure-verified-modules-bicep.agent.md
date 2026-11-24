@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Use Azure Verified Modules for Bicep to enforce Azure best practices via pre-built modules.
 
-Follow `docs/implementation-plan.md`: Phase 7 is design-only for the application stack. Do not deploy or run subscription-scoped validation without explicit approval. The separately approved network slice is the only planned deployment; confirm its cost and teardown plan first.
+Follow `.github/copilot-instructions.md` and `infra/README.md`. Do not create or change Azure resources, or run subscription-scoped what-if or deployments, without the user's approval; confirm the cost and the removal plan first.
 
 ## Discover modules
 

@@ -1,148 +1,65 @@
 ---
-title: Phase 0 Architecture Decision Register
-description: Proposed decisions and unresolved approvals for the product support agent MVP
+title: Architecture Decision Register
+description: One-page summary of the architecture decisions, with links to the decision records
 author: Udaybhanu Karmakar
-ms.date: 2026-11-22
+ms.date: 2026-11-24
 ms.topic: reference
 keywords:
   - architecture decisions
   - product support
-  - MVP
-estimated_reading_time: 9
+estimated_reading_time: 6
 ---
 
-## Approval status
+Each row is a decision in force. The linked ADR holds the context, the
+alternatives, and the consequences.
 
-Phases 0, 0b, 1, 2, and 3 are approved. Since 2026-11-22 the project runs in
-**demo delivery mode** ([ADR-0007](decisions/adr-0007-demo-delivery-mode.md)).
-Phases 4 to 7 proceed without per-phase approval within the guardrails and
-pre-authorized actions in that ADR. Controls needed only before production are
-recorded, not performed, and are collected in the Phase 9 gap register.
+## Product and scope
 
-The first live documentation ingestion ran on 2026-11-22: 302 of 400 requests,
-300 pages for 10 products, 0 failures (Phase 3 deferral D3-1 closed). The
-queue-emulator integration test from Phase 2 remains unrun and is
-production-only. Query and response retention stays off. Creating Azure
-resources other than `product-support-*` Search indexes, and deploying the
-application, still need the user.
-
-Phase 4 gateway decision: direct Foundry for demo; LiteLLM is the production gateway.
-Phase 5 chat decision: search once with the full question per turn, enforce a four-call ceiling, and show all manifest products so unsupported selections reach the uncovered-product state.
-Phase 6 retrieval decision: after title-aligned query rewriting did not improve the misses, retrieve up to four times the requested vector candidates, with a floor of the default Search top count. This second and final tuning iteration yielded 12/15 expected-source hits (80.0%), 28/28 citation URL matches, and 3/3 refusals. Semantic reranking was not evaluated because the Search tier and billing plan could not be verified; no service setting was changed.
-
-The user approved the Phase 0b [threat register](../security/threat-register.md)
-and [privacy impact assessment](../security/privacy-impact-assessment.md) with
-conditions. Query/response retention remains disabled until provider handling,
-reviewer access, notice, redaction, TTL, and deletion are verified.
-
-## Decisions requiring review
-
-| Topic | Proposed decision | Status |
+| Topic | Decision | Record |
 |---|---|---|
-| Product users and tasks | Target support engineers and product support analysts. Cover five tasks: confirm a product is in the demo catalog, find a public resource, answer a product question with a citation, explain when no indexed source exists, and identify an unsupported request. Proposed usability bar: at least four of five representative users complete at least four of these five tasks without moderator help. | Approved for planning; usability evidence remains Phase 5 |
-| Anonymous source access | Fetch only explicitly allowlisted documentation and knowledge hosts with anonymous GET requests. Never submit credentials or bypass a 401/403. Identify login redirects and login content as protected outcomes. Content comes only from entries in the versioned [source map](../operations/phase-3-source-map-v1.json): docs-portal JSON on `docs.microfocus.com` and sitemaps on `admhelp.microfocus.com`. `my.opentext.com` remains the catalog source only, and `support.opentext.com` is excluded because it is login-gated. | The user approved the linked documentation and knowledge hosts. A [delivery probe](../operations/phase-3-source-delivery-probe-2026-11-22.json) confirmed repeatable anonymous fetch paths for 10 manifest products. Source terms remain unverified, and no content is ingested. See [ADR-0006](decisions/adr-0006-periodic-resumable-source-ingestion.md). |
-| Catalog fallback | Use the feed only when the listing and search API cannot provide a valid catalog. Distinguish authorization failures, malformed responses, and empty catalogs. | Feed parsed successfully. Since 2026-11-23 a protected search API is skipped and the feed is used (`scripts/create_manifest.py`, [ADR-0002](decisions/adr-0002-source-access-and-manifest.md) amendment). Product pages are client-rendered and are used as the catalog only; content comes from the source map (ADR-0006) |
-| Source request budget | Ingestion runs use `PRODUCT_SUPPORT_SOURCE_REQUEST_BUDGET`: 400 by default and at most 2,000, counting every attempt including `robots.txt`. Under ADR-0007, runs within the default budget, at most one per day, are pre-authorized. This is not permission for unrestricted crawling or new hosts. | The discovery probe used about 35 GETs. The first ingestion run on 2026-11-22 used 302 GETs. Weekly refreshes cost far less because of conditional requests |
-| 100-product manifest | Use `MAX_DEMO_PRODUCTS`, default 100 and hard maximum 100. Select randomly once per manifest version, persist exact product IDs/names/URLs, and reuse for reruns. Sample from the full catalog; report products with no permitted indexed sources. | Manifest approved by the user on 2026-11-21. 10 products have approved documentation sources, and the coverage view reports the rest as having no approved public source |
-| Ingestion outcome disclosure | Persist product-level outcomes and expose the names of successfully indexed products to demo users, with the limited-catalog disclosure. Do not imply that products without indexed sources are supported. `GET /catalog/coverage` derives a per-product status (`indexed`, `pending`, `unavailable`, `excluded`, `no_public_source`) from the manifest, source map, and fetch state. The home page shows a summary and a table, indexed products first. If coverage cannot be loaded, it says no product should be assumed covered. | Implemented; 10 of 100 products are indexed and the UI discloses the limited coverage |
-| Data ownership | MongoDB is the system of record for manifests, run/product outcomes, and canonical documents. Azure AI Search is a derived index of traceable chunks. Queue messages carry product references only. | Approved for planning |
-| Search | Use the same user-provided Azure AI Search service locally and in the cloud design. Keep a thin interface and in-memory fake for routine tests. Use hybrid text/vector retrieval and preserve metadata filters and provenance. | A dedicated test-index definition was applied and read back on 2026-11-22. The demo index contains 952 chunks from 300 canonical pages. The live Search test passed in Phase 4. |
-| Search ranking | Start with Azure AI Search hybrid retrieval. Decide semantic reranking, fields, filters, and acceptance thresholds using a reviewed test set. | Hybrid keyword/vector retrieval, HNSW, cosine similarity, and product ID filters are implemented. The Phase 6 synthetic evaluation reached the demo threshold of 80% top-five expected-source hits, with 100% citation URL matches and all 3 unanswerable questions refused. Semantic reranking was not evaluated because tier and billing could not be verified. Human review and the 90% production relevance target remain deferred. |
-| Local component boundaries | Run the Next.js frontend, FastAPI with the agent, MongoDB, and Azurite in the local Podman Compose stack. Call the user's Foundry deployments directly for chat and embeddings; run documentation ingestion as a bounded one-shot command. Next.js calls FastAPI server-side, so the browser never calls the API directly. | Implemented; the Compose stack and health checks pass. See the [local development runbook](../operations/local-development.md) |
-| User-interface and backend languages | Use React/Next.js with TypeScript and Python with FastAPI/Microsoft Agent Framework. Record why these choices fit the project and document their toolchain trade-offs in [ADR-0005](decisions/adr-0005-ui-and-backend-technology.md). | Approved for Phase 1 |
-| Model gateway | Call the user's Foundry deployments through their OpenAI-compatible endpoint for the demo. Keep endpoint/deployment configuration outside source control. Use LiteLLM as the production model gateway. | Foundry chat (`gpt-5`) and embeddings (`text-embedding-3-small`, 1,536 dimensions) verified reachable on 2026-11-22. Direct Foundry calls are used for the demo; LiteLLM is the production gateway |
-| Citation handling | Retrieval returns stable evidence IDs and source URLs. The model may refer only to evidence IDs; the server resolves IDs to canonical URLs and renders citations. Never accept model-authored URLs as citations. | Approved for planning |
-| User authentication | No end-user authentication in the local MVP. Bind the demo to a local interface and do not expose it as a public service. Cloud authentication remains design-only for Phase 7. | Approved for planning |
-| Query and response telemetry | Do not persist query/response content in the demo. Any future retention requires policy, provider handling, notice, access, redaction, retention, and deletion controls plus user approval. | Not implemented; retention stays off |
-| Chat history | Do not display past searches in the MVP. Keep any UI session state transient and document its behavior. | Approved for planning |
-| Evaluation | Version a synthetic/reviewed dataset. Proposed production gates: 100% of displayed citations resolve to retrieved evidence; zero unsupported product/resource claims in the reviewed set; relevant evidence appears in the top five results for at least 90% of reviewed questions. Agree on latency and cost targets before production. | Phase 6 demo set: 12/15 expected-source hits (80.0%), 28/28 citation URL matches, and 3/3 refusals. The small set is not human-reviewed; production thresholds and latency/cost targets remain open. |
-| Accessibility | Target WCAG 2.2 AA, with automated checks plus manual keyboard and screen-reader review before Phase 5 closes. | Approved for planning |
-| Caching | No response cache in the MVP. Revisit only if baseline measurements show a need and cache data, TTL, and invalidation are approved. Durable source fetch state, conditional GETs, and a 24-hour freshness window are ingestion idempotency controls, not a response cache. | Approved for planning; fetch-state design proposed in ADR-0006 |
-| Periodic ingestion | Run the source indexer on a schedule, for example weekly. Durable per-URL state skips successes from the last 24 hours and unchanged revisions, uses conditional GETs, backs off failures (30 days permanent; 1–7 days transient), fails a product fast after three consecutive page failures, and abandons a host on rate limiting or an unavailable `robots.txt`. A MongoDB lease prevents overlapping runs. | Approved with Phase 3 on 2026-11-22 ([ADR-0006](decisions/adr-0006-periodic-resumable-source-ingestion.md)). First live run completed on 2026-11-22 with 0 failures. The source-terms legal review is production-only (ADR-0007) |
-| Azure deployment | Keep the application stack design-only; do not deploy APIM, AI Search, Cosmos DB, Container Apps, or application workloads. | Phase 7 Bicep and CI/CD definitions authored and validated; deployed once to an isolated test group with user approval and retained for review |
+| Users and tasks | Support engineers and product support analysts. Five tasks: confirm a product is in the demo catalog, find a public resource, get a cited answer to a product question, learn when no indexed source exists, and recognise an unsupported request. | [Solution architecture](architecture-overview.md#purpose-and-scope) |
+| Demo catalog | A reproducible random sample of 100 products from the OpenText product feed (hard maximum 100), reused for every run. Products without an approved source are shown as not covered. | [ADR-0002](decisions/adr-0002-source-access-and-manifest.md) |
+| Catalog discovery | Listing, then search API, then feed. A protected source (401, 403, sign-in redirect, or sign-in content) is skipped, recorded, and never retried with credentials. | [ADR-0002](decisions/adr-0002-source-access-and-manifest.md) |
+| Content sources | Anonymous requests to allowlisted hosts only, from an explicit, versioned source map; `robots.txt` honoured. | [ADR-0002](decisions/adr-0002-source-access-and-manifest.md), [ADR-0006](decisions/adr-0006-periodic-resumable-source-ingestion.md) |
+| Scope guardrails | Guardrails that always apply, changes that need an owner, and controls reserved for production. | [ADR-0007](decisions/adr-0007-demo-delivery-mode.md) |
 
-## Source verification
+## Application
 
-The initial probe used three GETs. After additional budget approval, one more
-GET was used to read a bounded feed prefix. Redirects were not followed, and no
-response body was stored.
-
-| Endpoint | Result | Interpretation |
+| Topic | Decision | Record |
 |---|---|---|
-| [Product listing](https://my.opentext.com/support/products/) | HTTP 200, `text/html`; 3,105 bytes inspected, with no anchor or script tags in the inspected prefix | A successful HTTP status did not establish that the response contains the product catalog. Server-rendering and page semantics remain unverified. |
-| [Search results API](https://my.opentext.com/api/web/support/search-results?start=1&maxResults=5&text=%2A) | HTTP 401, `text/plain` | Treat this API response as protected. Do not retry with credentials or treat it as an empty catalog. |
-| [Product feed](https://my.opentext.com/api/web/feed/product) | HTTP 200, `application/json`; an additional bounded read reached 16,385 bytes and was truncated | The complete feed was not downloaded or parsed. The response is larger than the probe limit; pagination, size, and parsing remain unverified. No response body was retained. |
+| Technology | Next.js and TypeScript for the interface; Python, FastAPI, and Microsoft Agent Framework for the API and agent. | [ADR-0005](decisions/adr-0005-ui-and-backend-technology.md) |
+| Interface boundary | The browser talks only to Next.js; Next.js calls the API from the server, so no CORS policy is needed. | [ADR-0005](decisions/adr-0005-ui-and-backend-technology.md) |
+| Agent tools | Two read-only tools: `search_documentation` and `list_products`. | [Solution architecture](architecture-overview.md#model-interaction) |
+| Citations | The model may cite only evidence IDs from the current request; the server resolves them to stored URLs and drops anything else. An answer with no valid citation becomes the standard refusal. | [Solution architecture](architecture-overview.md#model-interaction) |
+| Conversation | Kept in the browser tab only, up to 8 earlier turns sent with each question; never shown across sessions. | [ADR-0004](decisions/adr-0004-data-ownership-and-privacy.md) |
+| End-user sign-in | None in this version. Local services bind to `127.0.0.1`. | [ADR-0007](decisions/adr-0007-demo-delivery-mode.md) |
+| Caching | No response cache. Fetch state and conditional requests are ingestion controls, not a cache. | [ADR-0006](decisions/adr-0006-periodic-resumable-source-ingestion.md) |
+| Accessibility | Target WCAG 2.2 AA. | [Production gap register](../operations/production-gap-register.md) |
 
-The initial probe used three GETs. Of the original 100 additional GETs, one was
-previously used for a bounded feed-prefix read. The live verification used two
-feed GETs and 97 product-page GETs, exhausting that original additional budget.
-The user separately authorized one full-feed GET, which was also used in this
-verification. This accounts for 100 GETs under the original additional cap plus
-one separately authorized full-feed GET; the cumulative count including the
-initial three probes is 104.
+## Retrieval and models
 
-The full feed parsed into 1,302 unique products and produced the
-[100-product manifest](../operations/phase-2-product-manifest-v1.json). Of the
-97 product pages checked, all returned HTTP 200 but the login-content heuristic
-classified them as protected. Three manifest products were not checked. Since
-response bodies were not retained, those classifications are inconclusive. The
-[outcome report](../operations/phase-2-ingestion-outcome-v1.md) records the
-details. No page content was stored, and the live check did not enqueue products
-or persist ingestion run records. The user approved Phase 2 on 2026-11-21.
+| Topic | Decision | Record |
+|---|---|---|
+| Search | Azure AI Search everywhere; hybrid keyword and vector retrieval with product filters; semantic ranking off; versioned index names. | [ADR-0001](decisions/adr-0001-search-and-model-gateway.md) |
+| Models | `gpt-5` for chat and `text-embedding-3-small` (1,536 dimensions) for embeddings, called directly through Foundry's OpenAI-compatible endpoint; no model gateway in this version. | [ADR-0001](decisions/adr-0001-search-and-model-gateway.md) |
+| Evaluation | A versioned synthetic set of 15 answerable and 6 unanswerable or adversarial questions, measuring expected-source hits, citation validity, model-judged claim support, and refusals. | [Evaluation report](../operations/phase-6-evaluation-v2.md) |
 
-On 2026-11-22, a separately authorized check issued 100 anonymous GETs, one to
-each manifest product page. All returned HTTP 200 and were classified by the
-login-content heuristic as protected. No bodies were retained, so these
-classifications remain inconclusive. The [metadata-only report](../operations/phase-3-source-check-2026-11-22.json)
-records each outcome.
+## Data and ingestion
 
-The user then authorized further anonymous checks until ten products with
-usable content are found. In 172 GETs across two bounded batches, the follow-up
-review checked all 100 manifest product pages and inspected the public feed and
-client assets. Product detail is client-rendered; the raw HTML did not establish
-product-specific content, and request-capped browser checks were inconclusive.
-The feed contains nonempty descriptions for four manifest products, without a
-review of their suitability. Most documentation links use hosts outside the
-current allowlist; none of those hosts was contacted. The
-[follow-up report](../operations/phase-3-anonymous-source-review-2026-11-22.json)
-contains request metadata and no response bodies.
+| Topic | Decision | Record |
+|---|---|---|
+| Data ownership | The Mongo-compatible store is the system of record; the Search index is derived and rebuildable; queue messages hold references only; no user content is stored. | [ADR-0004](decisions/adr-0004-data-ownership-and-privacy.md) |
+| Retention | Query and response retention is not built and stays off. | [ADR-0004](decisions/adr-0004-data-ownership-and-privacy.md) |
+| Ingestion worker | Resumable, request-bounded, polite fetching with per-URL fetch state, freshness rules, backoff, fail-fast, and a single-run lease; Search kept in step with the store. | [ADR-0006](decisions/adr-0006-periodic-resumable-source-ingestion.md) |
+| Ingestion queue | One message per product, one message at a time, outcome recorded before the message is deleted, poison queue after five deliveries. | [ADR-0009](decisions/adr-0009-queue-driven-ingestion.md) |
 
-On 2026-11-22, the [delivery probe](../operations/phase-3-source-delivery-probe-2026-11-22.json)
-used about 35 anonymous GETs to establish how the observed documentation is
-delivered. The `docs.microfocus.com` portal serves its table of contents and
-page bodies as anonymous JSON. The `admhelp.microfocus.com` help sites serve
-server-rendered HTML and publish per-product sitemaps. The `robots.txt` files on
-both hosts allow the selected paths. One end-to-end page fetch returned real
-text. Fortify SAST returned HTTP 403 and was excluded. Bodies were inspected
-only to identify the formats and were not retained.
+## Platform and operations
 
-## Proposed manifest and ingestion contract
-
-* Generate a manifest only from a successfully parsed and deduplicated catalog.
-* Store a manifest version, selection method, selected product identifiers,
-  display names, canonical product URLs, and selection timestamp.
-* Reuse the same manifest for normal reruns. Replacing the sample requires an
-  explicit operation and a new version.
-* Enqueue one product reference per message. Never place source content or
-  credentials in queue messages.
-* Use stable source/document/chunk identifiers and content hashes for
-  idempotency. Record product-level success, protected skip, retry, and failure
-  outcomes without retaining protected content.
-* Treat changes to source content, parser version, embedding deployment, and
-  embedding dimensions as index-versioning events.
-* Define retry, poison-message, deletion, stale-content, and partial-run behavior
-  before Phase 2 implementation.
-
-## Phase 0 exit review
-
-The user approved the proposed Phase 0 direction with amendments and authorized
-Phase 0b. The live feed is parsed and a manifest is available. The product
-pages turned out to be client-rendered and are now the catalog only (see
-[ADR-0006](decisions/adr-0006-periodic-resumable-source-ingestion.md)). The
-user approved Phase 2 on 2026-11-21 and Phase 3 on 2026-11-22. No further
-source request is authorized without explicit approval. The original
-additional GET budget is exhausted; source approval does not bypass later phase
-gates.
-
-The full phase gate is listed in the
-[implementation plan](../implementation-plan.md#phase-0-product-discovery-and-architecture-decisions).
+| Topic | Decision | Record |
+|---|---|---|
+| Local environment | Podman Compose with the web app, API, MongoDB, Azurite, and the Aspire dashboard, bound to `127.0.0.1`. | [ADR-0003](decisions/adr-0003-local-first-boundaries.md) |
+| Azure environment | Container Apps in a virtual network, private data services, Key Vault, private registry, two-stage Bicep deployment. | [ADR-0010](decisions/adr-0010-azure-platform-and-api-management.md) |
+| API gateway | Classic API Management in external VNet mode: Developer for `dev` and `tst`, Premium for `prd`. | [ADR-0010](decisions/adr-0010-azure-platform-and-api-management.md) |
+| Identity | Managed identity for Key Vault, the queue, telemetry, and image pulls; keys from Key Vault for Search and Foundry; OIDC for GitHub Actions. | [Solution architecture](architecture-overview.md#identity-and-access) |
+| Monitoring | OpenTelemetry traces, metrics, and logs with no user content; Aspire locally, Azure Monitor in Azure. | [ADR-0008](decisions/adr-0008-opentelemetry.md) |
+| CI/CD | GitHub Actions: validation on every pull request; images built on every push to `main`; publishing and deployment from runners inside the virtual network; infrastructure deployed manually in two stages behind a what-if. | [Cloud setup guide](../../infra/README.md#pipelines) |
