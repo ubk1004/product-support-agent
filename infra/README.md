@@ -1,6 +1,6 @@
 ---
 title: Azure Infrastructure Design
-description: Design-only Bicep architecture and CI/CD bootstrap for the local-first demo
+description: Bicep architecture, live Azure verification results, and CI/CD bootstrap for the local-first demo
 author: Udaybhanu Karmakar
 ms.date: 2026-11-23
 ms.topic: reference
@@ -11,61 +11,123 @@ keywords:
   - GitHub Actions
 ---
 
-Scope note: this IaC is validated by build, lint and static review only and has not been deployed. It shows the intended Azure architecture. Production gates (policy scanning, structural checks, cost estimate, APIM SKU choice, branch protection) are recorded in the Phase 7 "Production-only" note and in `docs/operations/production-gap-register.md`. The focus was a working local application first.
+The Bicep in this directory was deployed to an isolated Azure resource group
+and exercised with the real application images, cloud ingestion, and chat.
+Production gates remain recorded in the Phase 7 "Production-only" note and
+the [production gap register](../docs/operations/production-gap-register.md).
 
 ## Status: written, validated, deployed
 
 | Item | Written | Validated | Deployed |
 |---|---|---|---|
-| Network, platform, data, identity, Container Apps modules | Yes | `az bicep build`, `build-params`, and `lint` pass (2026-11-23) | **No** |
-| Scheduled ingestion job (Container Apps job) | Yes. Runs `run_queue_ingestion.py run` against the private Storage Queue with managed identity (Queue Data Message Sender and Processor roles); the ingestion and poison queues are declared in Bicep | Same static checks | **No** |
-| API Management | Classic tier in external VNet mode: Developer for `dev` and `tst`, Premium for `prd`. Dedicated subnet, NSG, and static public IP; off in `dev` (`deployApim`) | Same static checks | **No** |
-| `infra`, `app`, and `validate` GitHub workflows | Yes | Checked offline by `tests/unit/test_workflows.py` (pinned actions verified against their tags, permissions, triggers, deployment gates); actionlint runs in CI but was not run locally; hosted runs not verified | **No** |
-| What-if against Azure | Attempted, blocked by an expired sign-in (`AADSTS700082`) | **Not run** | n/a |
+| Network and platform | Yes | Bicep build, lint, parameter compilation, provider validation, and what-if | Yes, in the isolated test group |
+| Foundry account, project, GPT-5 and embeddings | Yes, optional (`deployFoundry`) | Chat and embedding calls succeeded; embeddings return 1,536 dimensions | Yes |
+| Data services | Yes | DocumentDB Free ready; five private endpoints approved; private DNS records present | Yes |
+| Identity and secret bootstrap | Yes | Three identities, seven scoped role assignments, and three secret names verified (metadata only) | Yes |
+| Container Apps | Yes | Real API and web revisions healthy; web to API to DocumentDB, Search, and Foundry verified | Yes |
+| Ingestion job (Container Apps job) | Yes. Runs `run_queue_ingestion.py run` against the private Storage Queue with managed identity; ingestion and poison queues are declared in Bicep | Executed in Azure: 10 of 10 products with an approved source succeeded | Yes |
+| API Management | Classic tier in external VNet mode: Developer for `dev` and `tst`, Premium for `prd`. Dedicated subnet, NSG, and static public IP; off in `dev` (`deployApim`) | Succeeded; gateway rejects missing keys with 401; policy and no-body diagnostics verified | Yes, Developer |
+| `infra`, `app`, and `validate` GitHub workflows | Yes | Checked offline by `tests/unit/test_workflows.py` (pinned actions, permissions, triggers, deployment gates); actionlint runs in CI; hosted runs not verified | No |
 
-Nothing here is a claim that the infrastructure works in Azure. Static checks
-catch syntax and lint problems, not permission, quota, networking, or runtime
-errors.
+## Live verification
+
+The test environment is the resource group `rg-psa-tst-cae-01` (`tst`,
+instance `23`) in Canada East, with DocumentDB Free in Canada Central.
+
+Verified:
+
+* The full stack deploys, including Foundry, both model deployments, Search,
+  Key Vault, ACR, storage, telemetry, networking, Container Apps, and APIM.
+* Both images build from the repository Containerfiles, pull from the private
+  registry, and run healthy with API port 8000 and web port 3000.
+* Cloud ingestion on the approved source map finished with 10 of 10 products
+  that have an approved source succeeded and 90 skipped as `no_public_source`,
+  with no failures or dead-lettered messages.
+* Through the deployed web route, chat returns grounded answers with citations
+  to the approved documentation host, handles a follow-up, refuses an off-topic
+  question and a fictional product with no citations, and returns HTTP 400 for
+  malformed input. Product coverage renders on the home page.
+* Retention stayed off, and no query or response text was stored.
+
+Not verified:
+
+* An APIM request with a subscription key through to the API. The web app calls
+  the API directly and does not use APIM.
+* Retrieval and answer quality thresholds (`scripts/run_evaluation.py`).
+* A browser session. Checks used the deployed web route and rendered page.
+* Alerts and telemetry retention policy.
+
+Lessons that still apply:
+
+* Provider validation and what-if do not prove regional tier availability.
+  Canada East rejected DocumentDB Free at creation despite passing both, so
+  `documentDbLocation` places the Free cluster in Canada Central. There is no
+  paid fallback. The subscription also lacked Cosmos DB RU access in Canada East.
+* Updating the Foundry project and model deployments concurrently conflicts on
+  the parent account, so the template serializes those writes.
+* A Container Apps Consumption workload profile does not accept node
+  `minimumCount` or `maximumCount`.
+* The application accepts `local`, `test`, or `production` as its environment.
+  The template maps `prd` to `production` and every other environment to `test`.
+* Model capacity is a tokens-per-minute rate limit on pay-per-token
+  deployments. Capacity 1 allows 1,000 tokens per minute, which throttles chat
+  and ingestion with HTTP 429. The module defaults are 10 for GPT-5 and 20 for
+  embeddings; raise them for heavier use.
+* The registry is private, so images must be pushed from a runner or builder with
+  VNet access. Do not enable public access permanently.
+* Stopping an ingestion execution leaves its 6-hour lease in the
+  `ingestion_leases` collection (`source-ingestion`). Delete that document, or
+  wait for it to expire, before the next run.
+* GlobalStandard permits global model processing; locating the account in Canada
+  does not guarantee Canadian processing residency.
+
+> [!WARNING]
+> The test resources are retained and continue to incur charges. A budget is not
+> an Azure spending cap. Obtain explicit approval before deleting them.
 
 ### Known gaps
 
-* **API Management needs a cost decision before it is enabled.** The classic
+* API Management Developer was used for this isolated test only. The classic
   Developer tier has no SLA and one unit; Premium is the production tier and is
-  billed per unit. First creation in VNet mode can take 45 minutes or more.
+  billed per unit. Other environments still need a cost decision before enabling
+  it. First creation in VNet mode can take 45 minutes or more.
   Callers authenticate with a subscription key; Entra ID sign-in (`validate-jwt`)
   is a production gate.
-* **Key Vault secret values are not created by this IaC.** The job and apps
-  reference `mongodb-connection-string`, `azure-ai-search-api-key`, and
-  `azure-openai-api-key` by name. Someone with Key Vault access must create
-  them before the first run. The job's identity has the `Key Vault Secrets
-  User` role.
-* **The ingestion job needs the embedding settings.** It now indexes into
-  Search as it runs, so it receives the embedding model version and dimensions
-  (`embeddingModelVersion`, `embeddingDimensions`) and the Foundry and Search
-  settings. These must match the embedding deployment or the index name will
-  not match what the API reads.
-* **Image publishing needs a self-hosted runner.** The private registry is not
+* When `deployFoundry=true`, the ARM secret bootstrap creates
+  `mongodb-connection-string`, `azure-ai-search-api-key`, and
+  `azure-openai-api-key` without exposing values as outputs. With an existing
+  Foundry endpoint (`deployFoundry=false`), provision these secret values
+  separately.
+* The ingestion job indexes into Search as it runs, so it receives the
+  embedding model version and dimensions (`embeddingModelVersion`,
+  `embeddingDimensions`) and the Foundry and Search settings. These must match
+  the embedding deployment or the index name will not match what the API reads.
+* Image publishing needs a self-hosted runner. The private registry is not
   reachable from a GitHub-hosted runner. The workflow requires a runner labelled
   `dev-vnet`; it has not been created.
-* **Mongo-compatible store.** The Bicep provisions Azure Cosmos DB for MongoDB.
-  The application has only been exercised against MongoDB 8 locally.
-* **Telemetry is wired but untested in Azure.** The API and ingestion job send
-  OpenTelemetry traces, metrics, and logs to Application Insights with their
-  managed identities (Monitoring Metrics Publisher role), and API Management logs
-  requests without bodies. None of this has run in Azure.
+* The default Mongo-compatible store is RU-based Azure Cosmos DB for MongoDB.
+  `useDocumentDbFreeTier=true` selects Azure DocumentDB Free instead, requiring
+  a secure `documentDbAdministratorPassword` parameter and an available region.
+  This path has no paid fallback.
+* The API and ingestion job send OpenTelemetry traces to Application Insights
+  with their managed identities (Monitoring Metrics Publisher role), and API
+  Management logs requests without bodies. Alerts and a retention policy are not
+  configured.
 
 ## Azure infrastructure design
 
 The subscription-scope template creates the resource group, then provisions the
-network, platform, data, identity, and Container Apps modules in Canada Central.
+network, platform, data, identity, and Container Apps modules in Canada Central
+by default. The separate smoke parameters target Canada East.
 `deployApim` defaults to `false`. The web app has external ingress, the API has
 internal ingress, private endpoints are linked to the VNet through private DNS,
 and the Container Apps subnet uses a NAT Gateway for outbound traffic. Foundry
-remains a public endpoint configured with parameters.
+remains a public endpoint, either configured with parameters or created with
+`deployFoundry=true`.
 
-The Container Apps templates reference these Key Vault secret names; create
-their values separately before running workloads. No secret values belong in
-Bicep or parameter files:
+The Container Apps templates reference these Key Vault secret names. Use the
+optional ARM bootstrap or populate them separately before running workloads.
+Never commit secret values in Bicep or parameter files:
 
 * `mongodb-connection-string`
 * `azure-ai-search-api-key`
@@ -73,11 +135,50 @@ Bicep or parameter files:
 
 The cloud image references and Foundry parameter values in
 `bicep/parameters/dev.bicepparam` are placeholders. The full template is
-design-only and is not a separately deployable network slice.
+not a separately deployable network slice.
+
+### Staged deployment test
+
+The [smoke parameters](./bicep/smoke.bicepparam) select `tst`, instance `23`,
+Canada East, a new Foundry account, DocumentDB Free in Canada Central, APIM
+Developer, port 80 hello-world images, and a Manual ingestion job.
+`documentDbLocation` defaults to the stack's region, so the existing environment
+parameter files retain their behavior. Do not remove the Canada Central override
+without rechecking tier availability.
+
+The hello-world images test resource creation only and cannot run the ingestion
+command. To test the application, override `apiImage` and `webImage` with images
+pushed to the private registry and set `apiTargetPort` to 8000 and
+`webTargetPort` to 3000. Keep `scheduleIngestion=false` so ingestion runs only
+when started manually.
+
+Compile and validate before deploying:
+
+```powershell
+az bicep build --file infra\bicep\main.bicep --outfile .azure\smoke.template.json
+az bicep build-params --file infra\bicep\smoke.bicepparam --outfile .azure\smoke.parameters.json
+az bicep lint --file infra\bicep\main.bicep
+```
+
+Supply `documentDbAdministratorPassword` through a secure local parameter
+source, never command-line plaintext or committed files. Preserve the same
+credential across redeployments. The `.azure` directory is git-ignored; keep
+compiled templates and parameter files with credentials there.
+
+```powershell
+$subscription = '<subscription-id>'
+az deployment sub validate --subscription $subscription --location canadaeast --template-file .azure\smoke.template.json --parameters .azure\smoke.parameters.json deployWorkloads=false
+az deployment sub what-if --subscription $subscription --location canadaeast --template-file .azure\smoke.template.json --parameters .azure\smoke.parameters.json deployWorkloads=false
+az deployment sub create --subscription $subscription --location canadaeast --name '<unique-platform-deployment-name>' --template-file .azure\smoke.template.json --parameters .azure\smoke.parameters.json deployWorkloads=false
+```
+
+After the platform succeeds, secret metadata checks pass, and scoped roles
+propagate, validate, review what-if, and deploy again with
+`deployWorkloads=true`. Verify revisions, network access, and APIM separately.
 
 ## Naming
 
-Use `{type}-psa-{env}-cac-{nn}` for resource names where Azure permits it.
+Use `{type}-psa-{env}-{region}-{nn}` for resource names where Azure permits it.
 Resources with restricted character sets or shorter maximum lengths preserve
 the same project, environment, region, and instance tokens in a compact name.
 Global resource names include a short deterministic suffix.
@@ -87,7 +188,7 @@ Global resource names include a short deterministic suffix.
 | `{type}` | Azure resource type abbreviation | `vnet`, `cae`, `pe` |
 | `psa` | Product Support Agent | `psa` |
 | `{env}` | Environment | `dev` |
-| `cac` | Canada Central | `cac` |
+| `{region}` | Region token; `cac` for Canada Central, `cae` for Canada East | `cae` |
 | `{nn}` | Two-digit instance number | `01` |
 
 ## Mandatory tags
@@ -131,5 +232,6 @@ federated subject to match the repository before enabling OIDC.
 Run `az bicep build --file infra/bicep/main.bicep`,
 `az bicep build-params --file infra/bicep/parameters/dev.bicepparam`, and
 `az bicep lint --file infra/bicep/main.bicep` before review. The workflows
-repeat static checks. Deployment and resource changes are outside this
-validation boundary.
+repeat static checks. Provider validation and what-if are necessary but do not
+prove regional tier availability, as the live database attempt demonstrated.
+Further deployment and resource changes require the applicable user approval.

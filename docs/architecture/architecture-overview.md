@@ -431,7 +431,7 @@ flowchart TB
     Job --> Foundry
 ```
 
-![Azure infrastructure, designed in Bicep, not deployed](diagrams/azure-infrastructure.drawio.svg)
+![Azure infrastructure, designed in Bicep and verified in an isolated deployment](diagrams/azure-infrastructure.drawio.svg)
 
 The cloud design separates Container Apps and private endpoints into dedicated
 VNet subnets; the Container Apps subnet uses NAT for public Foundry and
@@ -439,15 +439,15 @@ documentation egress, while data services resolve through private DNS.
 
 The Mermaid view above remains the implemented local demo and its current
 public service dependencies; the adjacent cloud diagram is a separate
-design-only target, not a deployed network slice.
+target that was deployed once for verification, not a standing environment.
 
 ## Local-to-cloud component mapping
 
 | Local MVP | Conceptual Azure counterpart | Important difference or limit |
 |---|---|---|
-| Next.js UI | Container Apps `web` | External ingress; application deployment is deferred and the Bicep is not deployed. |
-| FastAPI and agent | Container Apps `api` | Internal ingress; Bicep defines managed identities and Key Vault references, but cloud runtime behavior is unverified. |
-| Source ingestion job, weekly task | Container Apps Job on a weekly cron schedule | Bicep routes public egress through NAT and defines private data endpoints; the job is not deployed. |
+| Next.js UI | Container Apps `web` | External ingress; deployed and verified in the isolated test. |
+| FastAPI and agent | Container Apps `api` | Internal ingress; managed identities and Key Vault references verified in the isolated test. |
+| Source ingestion job, weekly task | Container Apps Job on a weekly cron schedule | Bicep routes public egress through NAT and defines private data endpoints; the job ran manually once in the isolated test. |
 | Catalog process and queue worker | Azure Storage Queue | The queue and private endpoint are defined; a cloud queue worker is not part of Phase 7. |
 | Direct Foundry OpenAI-compatible calls | Public Microsoft Foundry endpoint; optional APIM module | Endpoint and deployment names are Bicep parameters; `deployApim` defaults to false. |
 | MongoDB | Cosmos DB for MongoDB with a private endpoint | Bicep defines the service and private DNS; authentication, `tz_aware` datetimes, and atomic lease upserts remain unverified. |

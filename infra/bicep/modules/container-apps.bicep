@@ -11,6 +11,9 @@ param instance string
 @description('Azure region for Container Apps resources.')
 param location string
 
+@description('Short region token used in resource names.')
+param locationAbbreviation string = 'cac'
+
 @description('Mandatory resource tags.')
 param tags object
 
@@ -95,10 +98,21 @@ param apiImage string
 @maxLength(512)
 param webImage string
 
-var environmentName = 'cae-psa-${environment}-cac-${instance}'
-var apiAppName = 'ca-api-psa-${environment}-cac-${instance}'
-var webAppName = 'ca-web-psa-${environment}-cac-${instance}'
-var ingestionJobName = 'job-ingest-psa-${environment}-cac-${instance}'
+@description('API container listening port.')
+param apiTargetPort int = 8000
+
+@description('Web container listening port.')
+param webTargetPort int = 3000
+
+@description('Enable scheduled ingestion; false creates a manual job for infrastructure tests.')
+param scheduleIngestion bool = true
+
+var environmentName = 'cae-psa-${environment}-${locationAbbreviation}-${instance}'
+var apiAppName = 'ca-api-psa-${environment}-${locationAbbreviation}-${instance}'
+var webAppName = 'ca-web-psa-${environment}-${locationAbbreviation}-${instance}'
+var ingestionJobName = 'job-ingest-psa-${environment}-${locationAbbreviation}-${instance}'
+var applicationEnvironment = environment == 'prd' ? 'production' : 'test'
+var foundryApiBaseUrl = uri(foundryEndpoint, '/openai/v1/')
 var apiKeyVaultUrl = '${keyVaultUri}secrets/azure-openai-api-key'
 var searchKeyVaultUrl = '${keyVaultUri}secrets/azure-ai-search-api-key'
 var mongoKeyVaultUrl = '${keyVaultUri}secrets/mongodb-connection-string'
@@ -134,8 +148,6 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2024-03-01'
       {
         name: 'Consumption'
         workloadProfileType: 'Consumption'
-        minimumCount: 0
-        maximumCount: 3
       }
     ]
     zoneRedundant: false
@@ -156,7 +168,7 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
       activeRevisionsMode: 'Single'
       ingress: {
         external: false
-        targetPort: 8000
+        targetPort: apiTargetPort
         transport: 'auto'
         allowInsecure: false
       }
@@ -212,7 +224,7 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
             }
             {
               name: 'AZURE_OPENAI_ENDPOINT'
-              value: foundryEndpoint
+              value: foundryApiBaseUrl
             }
             {
               name: 'AZURE_OPENAI_CHAT_DEPLOYMENT'
@@ -220,7 +232,7 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
             }
             {
               name: 'AZURE_OPENAI_EMBEDDING_ENDPOINT'
-              value: foundryEndpoint
+              value: foundryApiBaseUrl
             }
             {
               name: 'AZURE_OPENAI_EMBEDDING_DEPLOYMENT'
@@ -256,7 +268,7 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
             }
             {
               name: 'PRODUCT_SUPPORT_ENVIRONMENT'
-              value: environment == 'prd' ? 'production' : environment
+              value: applicationEnvironment
             }
           ]
         }
@@ -283,7 +295,7 @@ resource webApp 'Microsoft.App/containerApps@2024-03-01' = {
       activeRevisionsMode: 'Single'
       ingress: {
         external: true
-        targetPort: 3000
+        targetPort: webTargetPort
         transport: 'auto'
         allowInsecure: false
       }
@@ -330,7 +342,7 @@ resource ingestionJob 'Microsoft.App/jobs@2024-03-01' = {
   properties: {
     environmentId: containerAppsEnvironment.id
     configuration: {
-      triggerType: 'Schedule'
+      triggerType: scheduleIngestion ? 'Schedule' : 'Manual'
       replicaTimeout: 3600
       replicaRetryLimit: 0
       registries: [
@@ -360,8 +372,12 @@ resource ingestionJob 'Microsoft.App/jobs@2024-03-01' = {
           value: applicationInsightsConnectionString
         }
       ]
-      scheduleTriggerConfig: {
-        cronExpression: '0 0 2 * * 0'
+      scheduleTriggerConfig: scheduleIngestion ? {
+        cronExpression: '0 2 * * 0'
+        parallelism: 1
+        replicaCompletionCount: 1
+      } : null
+      manualTriggerConfig: scheduleIngestion ? null : {
         parallelism: 1
         replicaCompletionCount: 1
       }
@@ -412,7 +428,7 @@ resource ingestionJob 'Microsoft.App/jobs@2024-03-01' = {
             }
             {
               name: 'AZURE_OPENAI_ENDPOINT'
-              value: foundryEndpoint
+              value: foundryApiBaseUrl
             }
             {
               name: 'AZURE_OPENAI_CHAT_DEPLOYMENT'
@@ -420,7 +436,7 @@ resource ingestionJob 'Microsoft.App/jobs@2024-03-01' = {
             }
             {
               name: 'AZURE_OPENAI_EMBEDDING_ENDPOINT'
-              value: foundryEndpoint
+              value: foundryApiBaseUrl
             }
             {
               name: 'AZURE_OPENAI_EMBEDDING_DEPLOYMENT'
@@ -456,7 +472,7 @@ resource ingestionJob 'Microsoft.App/jobs@2024-03-01' = {
             }
             {
               name: 'PRODUCT_SUPPORT_ENVIRONMENT'
-              value: environment == 'prd' ? 'production' : environment
+              value: applicationEnvironment
             }
           ]
         }

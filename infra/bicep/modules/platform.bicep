@@ -11,15 +11,18 @@ param instance string
 @description('Azure region for platform resources.')
 param location string
 
+@description('Short region token used in resource names.')
+param locationAbbreviation string = 'cac'
+
 @description('Mandatory resource tags.')
 param tags object
 
 var nameHash = substring(uniqueString(resourceGroup().id), 0, 8)
 var registryName = 'acrpsa${environment}${instance}${nameHash}'
-var keyVaultName = 'kvpsa${environment}cac${instance}${nameHash}'
+var keyVaultName = 'kvpsa${environment}${locationAbbreviation}${instance}${nameHash}'
 
 resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
-  name: 'log-psa-${environment}-cac-${instance}'
+  name: 'log-psa-${environment}-${locationAbbreviation}-${instance}'
   location: location
   tags: tags
   properties: {
@@ -33,7 +36,7 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09
 }
 
 resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
-  name: 'appi-psa-${environment}-cac-${instance}'
+  name: 'appi-psa-${environment}-${locationAbbreviation}-${instance}'
   location: location
   tags: tags
   kind: 'web'

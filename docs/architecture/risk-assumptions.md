@@ -42,7 +42,7 @@ qualitative and require review.
 | A-02 | The local demo uses the user's Azure AI Search and Foundry deployments; no local model or vector store is introduced. | Confirm endpoint/deployment configuration and Entra ID or key-based auth in Phase 0. |
 | A-03 | The demo catalog uses a random, stable manifest with a parameterized hard maximum of 100 products. | Persist the selected IDs and outcomes; do not exceed the hard maximum or replace a manifest without an explicit operation. |
 | A-04 | MongoDB is the local metadata/canonical-data candidate; Azure AI Search is the derived search index. | Approve system-of-record ownership and retention before Phase 2. |
-| A-05 | The MVP is local-first. The application stack is not deployed to Azure. | Keep cloud IaC design-only and require separate authorization before any resource or workload deployment. |
+| A-05 | The MVP is local-first. The Azure stack was deployed only as an approved isolated test. | Keep any further resource or workload deployment behind separate authorization. |
 | A-06 | Query/response retention is a requested demo feature, but must be disabled until policy approval. | Approve the privacy impact assessment, notice, access, redaction, retention, and deletion controls before enabling it. |
 | A-07 | User questions, retrieved text, and provider responses are untrusted inputs. | Enforce validation, provenance, redaction, and abuse-case tests. |
 

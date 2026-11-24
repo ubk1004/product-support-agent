@@ -11,6 +11,9 @@ param instance string
 @description('Azure region for API Management.')
 param location string
 
+@description('Short region token used in resource names.')
+param locationAbbreviation string = 'cac'
+
 @description('Mandatory resource tags.')
 param tags object
 
@@ -51,7 +54,7 @@ param logAnalyticsWorkspaceId string
 @description('Internal HTTPS URL of the FastAPI Container App, reachable only inside the VNet.')
 param backendUrl string
 
-var apiManagementName = 'apim-psa-${environment}-cac-${instance}-${substring(uniqueString(resourceGroup().id), 0, 8)}'
+var apiManagementName = 'apim-psa-${environment}-${locationAbbreviation}-${instance}-${substring(uniqueString(resourceGroup().id), 0, 8)}'
 
 // The gateway forwards only /chat and /catalog/coverage, caps body size, rate-limits per
 // subscription key, and strips identifying response headers. It never logs bodies.
