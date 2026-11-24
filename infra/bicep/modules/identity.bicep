@@ -11,6 +11,9 @@ param instance string
 @description('Azure region for identity resources.')
 param location string
 
+@description('Short region token used in resource names.')
+param locationAbbreviation string = 'cac'
+
 @description('Key Vault name used for the secret-reader role scope.')
 @minLength(3)
 @maxLength(24)
@@ -39,19 +42,19 @@ var queueMessageProcessorRoleId = '8a0f0c08-91a1-4084-bc3d-661d67233fed'
 var queueMessageSenderRoleId = 'c6a89b2d-59bc-44d0-9896-0f6e12d7b80a'
 
 resource apiIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
-  name: 'id-api-psa-${environment}-cac-${instance}'
+  name: 'id-api-psa-${environment}-${locationAbbreviation}-${instance}'
   location: location
   tags: tags
 }
 
 resource ingestionIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
-  name: 'id-ingest-psa-${environment}-cac-${instance}'
+  name: 'id-ingest-psa-${environment}-${locationAbbreviation}-${instance}'
   location: location
   tags: tags
 }
 
 resource registryPullIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
-  name: 'id-acr-pull-psa-${environment}-cac-${instance}'
+  name: 'id-acr-pull-psa-${environment}-${locationAbbreviation}-${instance}'
   location: location
   tags: tags
 }

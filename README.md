@@ -43,7 +43,8 @@ To regenerate the video against a running stack, see
 |---|---|
 | What is this? | A grounded product-support assistant. Answers come only from indexed public documentation, and every claim cites a retrieved source. |
 | What does it cover? | **10 of 100** sampled products (300 pages). It does not answer about the other 90 and says so. |
-| Is it production ready? | No. It is a local demo; nothing is deployed to Azure. See the [production gap register](docs/operations/production-gap-register.md). |
+| Does it run in Azure? | Yes, verified end to end. The Bicep created the full stack in an isolated Azure resource group (Foundry and model deployments, Azure AI Search, Key Vault, private registry, DocumentDB, Container Apps, API Management). The real API and web images ran from Azure, cloud ingestion succeeded for all 10 covered products, and the deployed web app returned grounded, cited answers. Not tested in Azure: an APIM request with a subscription key, and the evaluation thresholds. See [infra/README.md](infra/README.md#live-verification). |
+| Is it production ready? | No. It is a local demo; the Azure deployment was an isolated verification test. See the [production gap register](docs/operations/production-gap-register.md). |
 | How good are the answers? | See [Evaluation results](#evaluation-results) for the measured results and their limits. |
 | What did not work as specified? | See [Source deviation](#source-deviation-from-the-original-brief). |
 
@@ -65,8 +66,10 @@ The approved source map covers 10 of the 100 manifest products. It has ingested
 300 pages and indexed 952 chunks. See [Evaluation results](#evaluation-results)
 for the measured results and what they do and do not show.
 
-This is a local demo, not a production service. The cloud application stack is
-not deployed. Production-only controls and blocking triggers are listed in the
+This is a local demo, not a production service. The Azure stack was deployed
+and verified end to end in an isolated test: infrastructure creation from the
+Bicep, then the application running from Azure with cloud ingestion and chat.
+Production-only controls and blocking triggers are listed in the
 [production gap register](docs/operations/production-gap-register.md), and the
 delivery boundaries are recorded in [ADR-0007](docs/architecture/decisions/adr-0007-demo-delivery-mode.md).
 
@@ -345,6 +348,28 @@ reasoning deployments reject it.
 | `PRODUCT_SUPPORT_SEARCH_DEMO_INDEX_BASE` | Base name for the versioned demo index. Keep it under the `product-support-*` namespace. |
 | `PRODUCT_SUPPORT_SEARCH_TEST_INDEX_BASE` | Base name for disposable live-test indexes. Keep it under the `product-support-test-*` namespace. |
 
+### Telemetry and environment
+
+Telemetry carries metadata only, never question or answer text.
+
+| Variable | Purpose and local-demo guidance |
+|---|---|
+| `PRODUCT_SUPPORT_ENVIRONMENT` | Deployment environment label: `local` (default), `test`, or `production`. Any other value stops the API at startup. Bicep sets `production` for `prd` and `test` otherwise. The web app also reads it for its telemetry resource attributes. |
+| `PRODUCT_SUPPORT_TELEMETRY_ENABLED` | Turns OpenTelemetry export on or off, default `true`. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP collector endpoint. Compose points it at the bundled Aspire dashboard. Leave empty to skip OTLP export; the web app exports only when it is set. |
+| `PRODUCT_SUPPORT_TELEMETRY_CONSOLE` | Also write traces, metrics, and logs to the console, default `false`. |
+| `PRODUCT_SUPPORT_TELEMETRY_METRIC_INTERVAL_MS` | Metric export interval in milliseconds, default 15000. |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | Azure Monitor export. Treat it as configuration, not a credential, when `PRODUCT_SUPPORT_TELEMETRY_USE_MANAGED_IDENTITY` is `true`. |
+| `PRODUCT_SUPPORT_TELEMETRY_USE_MANAGED_IDENTITY` | Authenticate Azure Monitor export with a managed identity, default `false`. |
+| `AZURE_CLIENT_ID` | Client ID of the user-assigned managed identity used for Azure Monitor export. |
+| `OTEL_SERVICE_NAME` | Service name reported by the web app, default `product-support-web`. |
+
+The settings `PRODUCT_SUPPORT_QUERY_RESPONSE_RETENTION_ENABLED`,
+`PRODUCT_SUPPORT_QUERY_RESPONSE_RETENTION_DAYS`, and
+`PRODUCT_SUPPORT_QUERY_REVIEWER_ROLE` exist for a future retention feature.
+Leave retention disabled; enabling it requires a reviewer role and privacy
+approval.
+
 ### Additional runtime and script settings
 
 | Variable | Purpose and local-demo guidance |
@@ -396,8 +421,8 @@ product-support-agent/
 └── uv.lock                     # Locked Python dependency graph
 ```
 
-The Azure architecture is authored as design-only Bicep in [infra/](infra/README.md);
-it has not been deployed. See the [IaC workflow](.github/workflows/infra.yml),
+The Azure architecture is authored as Bicep in [infra/](infra/README.md) and was
+deployed and verified in an isolated test group. See the [IaC workflow](.github/workflows/infra.yml),
 [application workflow](.github/workflows/app.yml), and
 [infrastructure diagram](docs/architecture/diagrams/azure-infrastructure.drawio.svg)
 alongside the [architecture overview](docs/architecture/architecture-overview.md).

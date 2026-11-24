@@ -11,6 +11,9 @@ param instance string
 @description('Azure region for the network resources.')
 param location string
 
+@description('Short region token used in resource names.')
+param locationAbbreviation string = 'cac'
+
 @description('Mandatory resource tags.')
 param tags object
 
@@ -20,10 +23,10 @@ param deployApim bool = false
 @description('DNS label for the API Management public IP; must be unique in the region.')
 param apimDnsLabel string = 'apim-psa-${environment}-${instance}-${substring(uniqueString(resourceGroup().id), 0, 6)}'
 
-var virtualNetworkName = 'vnet-psa-${environment}-cac-${instance}'
-var containerAppsNsgName = 'nsg-aca-psa-${environment}-cac-${instance}'
-var privateEndpointsNsgName = 'nsg-pe-psa-${environment}-cac-${instance}'
-var apimNsgName = 'nsg-apim-psa-${environment}-cac-${instance}'
+var virtualNetworkName = 'vnet-psa-${environment}-${locationAbbreviation}-${instance}'
+var containerAppsNsgName = 'nsg-aca-psa-${environment}-${locationAbbreviation}-${instance}'
+var privateEndpointsNsgName = 'nsg-pe-psa-${environment}-${locationAbbreviation}-${instance}'
+var apimNsgName = 'nsg-apim-psa-${environment}-${locationAbbreviation}-${instance}'
 var apimSubnetPrefix = '10.20.3.0/27'
 
 resource containerAppsNsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
@@ -205,7 +208,7 @@ resource apimNsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = if (depl
 }
 
 resource apimPublicIp 'Microsoft.Network/publicIPAddresses@2024-05-01' = if (deployApim) {
-  name: 'pip-apim-psa-${environment}-cac-${instance}'
+  name: 'pip-apim-psa-${environment}-${locationAbbreviation}-${instance}'
   location: location
   tags: tags
   sku: {
@@ -222,7 +225,7 @@ resource apimPublicIp 'Microsoft.Network/publicIPAddresses@2024-05-01' = if (dep
 }
 
 resource publicIp 'Microsoft.Network/publicIPAddresses@2024-05-01' = {
-  name: 'pip-nat-psa-${environment}-cac-${instance}'
+  name: 'pip-nat-psa-${environment}-${locationAbbreviation}-${instance}'
   location: location
   tags: tags
   sku: {
@@ -235,7 +238,7 @@ resource publicIp 'Microsoft.Network/publicIPAddresses@2024-05-01' = {
 }
 
 resource natGateway 'Microsoft.Network/natGateways@2024-05-01' = {
-  name: 'nat-psa-${environment}-cac-${instance}'
+  name: 'nat-psa-${environment}-${locationAbbreviation}-${instance}'
   location: location
   tags: tags
   sku: {
@@ -296,6 +299,9 @@ resource privateEndpointSubnet 'Microsoft.Network/virtualNetworks/subnets@2024-0
       id: privateEndpointsNsg.id
     }
   }
+  dependsOn: [
+    containerAppsSubnet
+  ]
 }
 
 // Classic API Management injection: undelegated subnet with its own NSG. /27 leaves room for

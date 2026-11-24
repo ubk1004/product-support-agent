@@ -1,6 +1,6 @@
 ---
 title: Product Support Agent Implementation Plan
-description: Demo delivery plan for a local-first product-support AI agent with a conceptual, statically validated Azure design in Canada Central
+description: Demo delivery plan for a local-first product-support AI agent with a validated Azure design, verified in an isolated deployment
 author: Udaybhanu Karmakar
 ms.date: 2026-11-22
 ms.topic: concept
@@ -26,8 +26,8 @@ This plan turns the requirements in [Instructions.md](../Instructions.md) into a
 
 ## Confirmed scope decisions
 
-* **Local-first demo.** The working demonstration runs locally on Podman. The MVP is complete at Phase 6.
-* **Cloud is conceptual plus IaC.** The Azure architecture (APIM, VNet, private endpoints, managed identity) exists to show the intended security posture. It is expressed as Bicep that is authored and statically validated for Canada Central (`canadacentral`). The full stack is not deployed, because APIM, AI Search, and private networking carry significant monthly cost.
+* **Local-first demo with a verified Azure deployment.** The working demonstration runs locally on Podman. The MVP is complete at Phase 6.
+* **Cloud is IaC verified in an isolated test.** The Azure architecture (APIM, VNet, private endpoints, managed identity) shows the intended security posture and is expressed as Bicep. It was deployed once to an isolated group in Canada East (DocumentDB Free in Canada Central) and verified with the real application, then retained for review. APIM, AI Search, and private networking carry significant monthly cost, so it is not a standing environment.
 * **Network slice.** A separately deployable subset of the IaC (VNet, subnets, NSGs, egress, private DNS, and low-cost private-endpoint services) is designed in Phase 7. Deploying it needs the user and is not required for the demo.
 * **Models.** Chat and embedding models are Microsoft Foundry deployments supplied by the user: chat `gpt-5` and embeddings `text-embedding-3-small` (1,536 dimensions), both verified reachable on 2026-11-22. The demo may call Foundry directly through its OpenAI-compatible endpoint; LiteLLM is the intended gateway and is optional for the demo (Phase 4, work package 7). No local models are used. Credentials are never committed.
 * **Search.** Local and cloud both use the user-provided Azure AI Search service. There is no local vector store (no PostgreSQL/pgvector), which removes the local-versus-cloud adapter mismatch. The local demo therefore depends on network access to Azure.
@@ -441,18 +441,9 @@ After the Phase 6 close, a review against the original brief led to these change
 
 ### Phase 7: Cloud architecture, IaC, and CI/CD definitions
 
-**Status:** Authored and statically validated (2026-11-23), with exceptions below. Passed:
-`az bicep build --file infra/bicep/main.bicep`,
-`az bicep build-params --file infra/bicep/parameters/dev.bicepparam`,
-`az bicep lint --file infra/bicep/main.bicep` (no diagnostics), the specified
-`podman run --rm -v "${PWD}:/repo" -w /repo docker.io/rhysd/actionlint:latest -color`,
-SHA pin checks, and diagram XML/link/resource checks. Mypy, pytest (310 passed,
-1 deselected), Bandit, pip-audit, and web lint/typecheck/build passed.
-`uv run ruff format --check .` found formatting differences, and `uv run ruff check .`
-reported three F401 findings in existing working-tree edits to
-`src/product_support_agent/chat.py`. What-if was attempted but blocked by
-`AADSTS700082` (expired refresh token); it was not skipped, no login was
-performed, and no resources were changed.
+**Status:** Authored, statically validated, and deployed to an isolated Azure test group. The Bicep build, lint, and parameter compilation pass, along with the actionlint and SHA pin checks, Ruff, mypy, pytest (466 passed, 1 deselected), Bandit, and the web lint, typecheck, and build.
+
+**Live Azure verification:** The full stack deployed in Canada East, with DocumentDB Free in Canada Central because Canada East rejected the Free tier at creation despite passing validation and what-if. With the real API and web images, bounded cloud ingestion succeeded for all 10 products that have an approved source, and the deployed web route returned grounded, cited answers, handled follow-ups, and refused out-of-scope questions. Not verified: an authenticated APIM request to the API, evaluation quality thresholds in Azure, and a browser session. Findings and limits are in the [live verification results](../infra/README.md#live-verification).
 
 **Goal:** Show the intended Azure architecture as validated Bicep, plus GitHub Actions pipelines for IaC and for application build and deployment.
 

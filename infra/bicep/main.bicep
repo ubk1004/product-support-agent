@@ -18,6 +18,27 @@ param instance string = '01'
 @description('Azure region for the deployment.')
 param location string = 'canadacentral'
 
+@description('Short region token used in resource names.')
+@minLength(3)
+@maxLength(3)
+param locationAbbreviation string = location == 'canadaeast' ? 'cae' : 'cac'
+
+@description('Create a Foundry account, project and pay-per-token model deployments instead of using an existing endpoint.')
+param deployFoundry bool = false
+
+@description('Deploy application resources after platform provisioning and workload role propagation.')
+param deployWorkloads bool = true
+
+@description('Use Azure DocumentDB Free tier instead of the RU-based Cosmos DB for MongoDB account.')
+param useDocumentDbFreeTier bool = false
+
+@description('Azure region for the optional DocumentDB Free cluster; private endpoints remain in the deployment region.')
+param documentDbLocation string = location
+
+@description('DocumentDB native administrator password, supplied securely only when useDocumentDbFreeTier is true.')
+@secure()
+param documentDbAdministratorPassword string = ''
+
 @description('Non-secret owner tag value.')
 @minLength(2)
 @maxLength(64)
@@ -62,6 +83,19 @@ param apiImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:la
 @maxLength(512)
 param webImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 
+@description('API container listening port. Use 80 for the public infrastructure smoke-test image.')
+@minValue(1)
+@maxValue(65535)
+param apiTargetPort int = 8000
+
+@description('Web container listening port. Use 80 for the public infrastructure smoke-test image.')
+@minValue(1)
+@maxValue(65535)
+param webTargetPort int = 3000
+
+@description('Run ingestion on its weekly schedule. Disable for infrastructure-only smoke tests.')
+param scheduleIngestion bool = true
+
 @description('Deploy the classic API Management service in external VNet mode. Off by default; it adds a Developer or Premium instance with a monthly cost.')
 param deployApim bool = false
 
@@ -76,7 +110,7 @@ param apimPublisherEmail string = 'apim-owner@example.invalid'
 @description('API Management publisher name.')
 param apimPublisherName string = 'Product Support Agent'
 
-var resourceGroupName = 'rg-psa-${environment}-cac-${instance}'
+var resourceGroupName = 'rg-psa-${environment}-${locationAbbreviation}-${instance}'
 var resolvedApimSku = environment == 'prd' ? 'Premium' : 'Developer'
 var tags = {
   application: 'product-support-agent'
@@ -107,6 +141,7 @@ module network 'modules/network.bicep' = {
     environment: environment
     instance: instance
     location: location
+    locationAbbreviation: locationAbbreviation
     tags: tags
     deployApim: deployApim
   }
@@ -122,6 +157,7 @@ module platform 'modules/platform.bicep' = {
     environment: environment
     instance: instance
     location: location
+    locationAbbreviation: locationAbbreviation
     tags: tags
   }
   dependsOn: [
@@ -136,10 +172,14 @@ module data 'modules/data.bicep' = {
     environment: environment
     instance: instance
     location: location
+    locationAbbreviation: locationAbbreviation
     privateEndpointSubnetId: network.outputs.privateEndpointSubnetId
     virtualNetworkId: network.outputs.virtualNetworkId
     keyVaultId: platform.outputs.keyVaultId
     registryId: platform.outputs.registryId
+    useDocumentDbFreeTier: useDocumentDbFreeTier
+    documentDbLocation: documentDbLocation
+    documentDbAdministratorPassword: documentDbAdministratorPassword
     tags: tags
   }
 }
@@ -151,6 +191,7 @@ module identity 'modules/identity.bicep' = {
     environment: environment
     instance: instance
     location: location
+    locationAbbreviation: locationAbbreviation
     keyVaultName: platform.outputs.keyVaultName
     registryName: platform.outputs.registryName
     applicationInsightsName: platform.outputs.applicationInsightsName
@@ -159,13 +200,43 @@ module identity 'modules/identity.bicep' = {
   }
 }
 
-module containerApps 'modules/container-apps.bicep' = {
+module foundry 'modules/foundry.bicep' = if (deployFoundry) {
+  name: 'foundry'
+  scope: deploymentResourceGroup
+  params: {
+    environment: environment
+    instance: instance
+    location: location
+    locationAbbreviation: locationAbbreviation
+    tags: tags
+  }
+  dependsOn: [
+    resourceGroup
+  ]
+}
+
+module secrets 'modules/secrets.bicep' = if (deployFoundry) {
+  name: 'bootstrap-secrets'
+  scope: deploymentResourceGroup
+  params: {
+    keyVaultName: platform.outputs.keyVaultName
+    cosmosAccountName: data.outputs.cosmosAccountName
+    searchServiceName: data.outputs.searchServiceName
+    foundryAccountName: foundry!.outputs.accountName
+    useDocumentDbFreeTier: useDocumentDbFreeTier
+    documentDbClusterName: data.outputs.documentDbClusterName
+    documentDbAdministratorPassword: documentDbAdministratorPassword
+  }
+}
+
+module containerApps 'modules/container-apps.bicep' = if (deployWorkloads) {
   name: 'container-apps'
   scope: deploymentResourceGroup
   params: {
     environment: environment
     instance: instance
     location: location
+    locationAbbreviation: locationAbbreviation
     tags: tags
     containerAppsSubnetId: network.outputs.containerAppsSubnetId
     logAnalyticsWorkspaceId: platform.outputs.logAnalyticsWorkspaceId
@@ -182,23 +253,30 @@ module containerApps 'modules/container-apps.bicep' = {
     searchEndpoint: data.outputs.searchEndpoint
     queueServiceUrl: data.outputs.queueServiceUrl
     ingestionQueueName: data.outputs.queueName
-    foundryEndpoint: foundryEndpoint
-    foundryChatDeployment: foundryChatDeployment
-    foundryEmbeddingDeployment: foundryEmbeddingDeployment
+    foundryEndpoint: deployFoundry ? foundry!.outputs.openAiEndpoint : foundryEndpoint
+    foundryChatDeployment: deployFoundry ? foundry!.outputs.chatDeploymentName : foundryChatDeployment
+    foundryEmbeddingDeployment: deployFoundry ? foundry!.outputs.embeddingDeploymentName : foundryEmbeddingDeployment
     embeddingModelVersion: embeddingModelVersion
     embeddingDimensions: embeddingDimensions
     apiImage: apiImage
     webImage: webImage
+    apiTargetPort: apiTargetPort
+    webTargetPort: webTargetPort
+    scheduleIngestion: scheduleIngestion
   }
+  dependsOn: [
+    secrets
+  ]
 }
 
-module apim 'modules/apim.bicep' = if (deployApim) {
+module apim 'modules/apim.bicep' = if (deployApim && deployWorkloads) {
   name: 'optional-apim'
   scope: deploymentResourceGroup
   params: {
     environment: environment
     instance: instance
     location: location
+    locationAbbreviation: locationAbbreviation
     tags: tags
     skuName: resolvedApimSku
     skuCapacity: apimSkuCapacity
@@ -209,14 +287,17 @@ module apim 'modules/apim.bicep' = if (deployApim) {
     applicationInsightsId: platform.outputs.applicationInsightsId
     applicationInsightsConnectionString: platform.outputs.applicationInsightsConnectionString
     logAnalyticsWorkspaceId: platform.outputs.logAnalyticsWorkspaceId
-    backendUrl: 'https://${containerApps.outputs.apiAppFqdn}'
+    backendUrl: 'https://${containerApps!.outputs.apiAppFqdn}'
   }
 }
 
 output resourceGroupName string = resourceGroupName
 output virtualNetworkId string = network.outputs.virtualNetworkId
-output containerAppsEnvironmentName string = containerApps.outputs.environmentName
-output apiContainerAppName string = containerApps.outputs.apiAppName
-output webContainerAppName string = containerApps.outputs.webAppName
-output ingestionJobName string = containerApps.outputs.ingestionJobName
-output apimSku string = deployApim ? resolvedApimSku : 'not deployed'
+output containerAppsEnvironmentName string = deployWorkloads ? containerApps!.outputs.environmentName : ''
+output apiContainerAppName string = deployWorkloads ? containerApps!.outputs.apiAppName : ''
+output webContainerAppName string = deployWorkloads ? containerApps!.outputs.webAppName : ''
+output ingestionJobName string = deployWorkloads ? containerApps!.outputs.ingestionJobName : ''
+output apimSku string = deployApim && deployWorkloads ? resolvedApimSku : 'not deployed'
+output foundryAccountName string = deployFoundry ? foundry!.outputs.accountName : ''
+output foundryProjectEndpoint string = deployFoundry ? foundry!.outputs.projectEndpoint : ''
+output foundryOpenAiEndpoint string = deployFoundry ? foundry!.outputs.openAiEndpoint : foundryEndpoint

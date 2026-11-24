@@ -62,13 +62,13 @@ stand in for private endpoints, for the local demo only.
 | Protected resources | Skip 401/403, login redirects, and login-content responses; record minimal reason | Same application behavior plus private network controls where applicable |
 | Retrieval and citations | Server-side evidence IDs and source URLs; reject citations not bound to retrieval | APIM and service identity controls do not replace application citation validation |
 | Prompt injection | Treat retrieved text as data; restrict tools; validate tool inputs and model output | Same application controls with policy and monitoring integration |
-| Secrets | Local environment/configuration outside source control; no credentials in fixtures, logs, or traces | Key Vault references and user-assigned managed identities designed in Bicep, not deployed; GitHub Actions OIDC |
-| Network isolation | Segmented Podman networks if validated; local demo bound to local access | VNet, subnets, NSGs, private endpoints/DNS, and NAT egress designed in Bicep, not deployed; APIM is optional and disabled |
-| Search/data access | User-provided Azure AI Search; least-privilege Entra ID where supported; no shared production data | Cosmos DB, Storage Queue, Search, Key Vault, and ACR private endpoints with private DNS designed in Bicep, not deployed |
+| Secrets | Local environment/configuration outside source control; no credentials in fixtures, logs, or traces | Key Vault references and user-assigned managed identities, deployed and verified in an isolated test; GitHub Actions OIDC |
+| Network isolation | Segmented Podman networks if validated; local demo bound to local access | VNet, subnets, NSGs, private endpoints/DNS, and NAT egress, deployed and verified in an isolated test; APIM is optional and was tested at the Developer tier |
+| Search/data access | User-provided Azure AI Search; least-privilege Entra ID where supported; no shared production data | Cosmos DB or DocumentDB, Storage Queue, Search, Key Vault, and ACR private endpoints with private DNS, deployed and verified in an isolated test |
 | Telemetry | OpenTelemetry-compatible, minimized metadata; query/response content is not retained | Azure Monitor and Log Analytics with approved retention and access controls |
 | Supply chain | Dependency lock and scans, secret scanning, container scanning in CI | Pinned GitHub Actions, protected deployment environment, artifact provenance |
 | User access | Local-only demo with no end-user authentication; no public exposure | User authentication and authorization remain a Phase 7 design decision |
-| Cloud deployment | No application stack deployment | IaC and CI/CD definitions authored and statically validated; not deployed |
+| Cloud deployment | No application stack deployment | IaC and CI/CD definitions authored and validated; the stack was deployed once to an isolated test group |
 
 ## Required evidence
 

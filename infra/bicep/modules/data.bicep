@@ -11,6 +11,9 @@ param instance string
 @description('Azure region for data resources.')
 param location string
 
+@description('Short region token used in resource names.')
+param locationAbbreviation string = 'cac'
+
 @description('Private endpoint subnet resource ID.')
 param privateEndpointSubnetId string
 
@@ -23,23 +26,35 @@ param keyVaultId string
 @description('Container registry resource ID for its private endpoint.')
 param registryId string
 
+@description('Use the free DocumentDB Mongo-compatible cluster instead of RU-based Cosmos DB.')
+param useDocumentDbFreeTier bool = false
+
+@description('Azure region for the optional DocumentDB Free cluster.')
+param documentDbLocation string = location
+
+@description('DocumentDB native administrator password. Never output this value.')
+@secure()
+param documentDbAdministratorPassword string = ''
+
 @description('Mandatory resource tags.')
 param tags object
 
 var nameHash = substring(uniqueString(resourceGroup().id), 0, 8)
-var cosmosAccountName = 'cosmos-psa-${environment}-cac-${instance}-${nameHash}'
+var cosmosAccountName = 'cosmos-psa-${environment}-${locationAbbreviation}-${instance}-${nameHash}'
+var documentDbRegionToken = documentDbLocation == 'canadacentral' ? 'cac' : locationAbbreviation
+var documentDbClusterName = 'docdb-psa-${environment}-${documentDbRegionToken}-${instance}-${nameHash}'
 var storageAccountName = 'psa${environment}${instance}${substring(uniqueString(resourceGroup().id), 0, 13)}'
-var searchServiceName = 'search-psa-${environment}-cac-${instance}-${nameHash}'
+var searchServiceName = 'search-psa-${environment}-${locationAbbreviation}-${instance}-${nameHash}'
 var queueName = 'product-ingestion'
 var dnsNames = [
-  'privatelink.mongo.cosmos.azure.com'
+  useDocumentDbFreeTier ? 'privatelink.mongocluster.cosmos.azure.com' : 'privatelink.mongo.cosmos.azure.com'
   'privatelink.queue.${az.environment().suffixes.storage}'
   'privatelink.search.windows.net'
   'privatelink.vaultcore.azure.net'
   'privatelink.azurecr.io'
 ]
 
-resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {
+resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = if (!useDocumentDbFreeTier) {
   name: cosmosAccountName
   location: location
   tags: tags
@@ -61,6 +76,32 @@ resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {
     enableFreeTier: false
     publicNetworkAccess: 'Disabled'
     networkAclBypass: 'None'
+  }
+}
+
+resource documentDbCluster 'Microsoft.DocumentDB/mongoClusters@2026-06-01' = if (useDocumentDbFreeTier) {
+  name: documentDbClusterName
+  location: documentDbLocation
+  tags: tags
+  properties: {
+    administrator: {
+      userName: 'clusteradmin'
+      password: documentDbAdministratorPassword
+    }
+    serverVersion: '8.0'
+    compute: {
+      tier: 'Free'
+    }
+    storage: {
+      sizeGb: 32
+    }
+    sharding: {
+      shardCount: 1
+    }
+    highAvailability: {
+      targetMode: 'Disabled'
+    }
+    publicNetworkAccess: 'Disabled'
   }
 }
 
@@ -136,7 +177,7 @@ resource privateDnsLinks 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@
 }]
 
 resource cosmosPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-05-01' = {
-  name: 'pe-cosmos-psa-${environment}-cac-${instance}'
+  name: 'pe-cosmos-psa-${environment}-${locationAbbreviation}-${instance}'
   location: location
   tags: tags
   properties: {
@@ -147,9 +188,9 @@ resource cosmosPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-05-01' =
       {
         name: 'cosmos-mongodb'
         properties: {
-          privateLinkServiceId: cosmosAccount.id
+          privateLinkServiceId: useDocumentDbFreeTier ? documentDbCluster!.id : cosmosAccount!.id
           groupIds: [
-            'MongoDB'
+            useDocumentDbFreeTier ? 'MongoCluster' : 'MongoDB'
           ]
         }
       }
@@ -158,7 +199,7 @@ resource cosmosPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-05-01' =
 }
 
 resource storagePrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-05-01' = {
-  name: 'pe-queue-psa-${environment}-cac-${instance}'
+  name: 'pe-queue-psa-${environment}-${locationAbbreviation}-${instance}'
   location: location
   tags: tags
   properties: {
@@ -180,7 +221,7 @@ resource storagePrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-05-01' 
 }
 
 resource searchPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-05-01' = {
-  name: 'pe-search-psa-${environment}-cac-${instance}'
+  name: 'pe-search-psa-${environment}-${locationAbbreviation}-${instance}'
   location: location
   tags: tags
   properties: {
@@ -202,7 +243,7 @@ resource searchPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-05-01' =
 }
 
 resource keyVaultPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-05-01' = {
-  name: 'pe-keyvault-psa-${environment}-cac-${instance}'
+  name: 'pe-keyvault-psa-${environment}-${locationAbbreviation}-${instance}'
   location: location
   tags: tags
   properties: {
@@ -224,7 +265,7 @@ resource keyVaultPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-05-01'
 }
 
 resource registryPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-05-01' = {
-  name: 'pe-acr-psa-${environment}-cac-${instance}'
+  name: 'pe-acr-psa-${environment}-${locationAbbreviation}-${instance}'
   location: location
   tags: tags
   properties: {
@@ -320,7 +361,8 @@ resource registryDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGrou
   }
 }
 
-output cosmosAccountName string = cosmosAccount.name
+output cosmosAccountName string = useDocumentDbFreeTier ? '' : cosmosAccount!.name
+output documentDbClusterName string = useDocumentDbFreeTier ? documentDbCluster!.name : ''
 output storageAccountName string = storageAccount.name
 output queueName string = ingestionQueue.name
 output queueServiceUrl string = storageAccount.properties.primaryEndpoints.queue
