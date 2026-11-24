@@ -23,9 +23,6 @@ ALLOWED_SOURCE_HOSTS = frozenset(
     }
 )
 MAX_DEMO_PRODUCTS = 100
-LISTING_URL = "https://my.opentext.com/support/products/"
-SEARCH_URL = "https://my.opentext.com/api/web/support/search-results"
-FEED_URL = "https://my.opentext.com/api/web/feed/product"
 
 
 class ProductReference(BaseModel):
@@ -178,9 +175,9 @@ class CatalogClient:
         self,
         *,
         client: httpx.AsyncBaseTransport | httpx.Client | None = None,
-        listing_url: str = LISTING_URL,
-        search_url: str = SEARCH_URL,
-        feed_url: str = FEED_URL,
+        listing_url: str,
+        search_url: str,
+        feed_url: str,
         max_pages: int = 20,
         timeout_seconds: float = 10.0,
         max_response_bytes: int = 4_194_304,

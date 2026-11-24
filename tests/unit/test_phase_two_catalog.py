@@ -26,8 +26,16 @@ def item(number: int) -> dict[str, str]:
     return {"id": f"p{number:03}", "name": f"Product {number}", "slug": f"p{number:03}"}
 
 
+CATALOG_URLS = {
+    "listing_url": "https://my.opentext.com/support/products/",
+    "search_url": "https://my.opentext.com/api/web/support/search-results",
+    "feed_url": "https://my.opentext.com/api/web/feed/product",
+}
+
+
 def discover(handler, **kwargs):
-    return asyncio.run(CatalogClient(client=httpx.MockTransport(handler), **kwargs).discover())
+    client = CatalogClient(client=httpx.MockTransport(handler), **{**CATALOG_URLS, **kwargs})
+    return asyncio.run(client.discover())
 
 
 def test_listing_is_preferred_and_duplicates_are_removed() -> None:
@@ -229,6 +237,33 @@ def test_source_url_allowlist(url: str, allowed: bool) -> None:
     assert validate_source_url(url) is allowed
 
 
+def test_catalog_urls_are_required_and_have_no_second_default() -> None:
+    with pytest.raises(TypeError):
+        CatalogClient(client=httpx.MockTransport(lambda request: httpx.Response(404)))  # type: ignore[call-arg]
+
+
+def test_catalog_client_uses_the_urls_from_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(
+        "PRODUCT_SUPPORT_CATALOG_LISTING_URL", "https://my.opentext.com/support/other/"
+    )
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.catalog_search_url == "https://my.opentext.com/api/web/support/search-results"
+    calls: list[str] = []
+
+    def handler(request):
+        calls.append(str(request.url))
+        return httpx.Response(200, text="<html>No products</html>")
+
+    client = CatalogClient(
+        client=httpx.MockTransport(handler),
+        listing_url=settings.catalog_listing_url,
+        search_url=settings.catalog_search_url,
+        feed_url=settings.catalog_feed_url,
+    )
+    asyncio.run(client.discover())
+    assert calls[0] == "https://my.opentext.com/support/other/"
+
+
 def test_catalog_requests_remain_limited_to_catalog_host() -> None:
     calls = []
 
@@ -236,7 +271,7 @@ def test_catalog_requests_remain_limited_to_catalog_host() -> None:
         calls.append(request)
         return httpx.Response(200, text="unexpected")
 
-    client = CatalogClient(client=httpx.MockTransport(handler))
+    client = CatalogClient(client=httpx.MockTransport(handler), **CATALOG_URLS)
     result = asyncio.run(client._bounded_get("https://support.opentext.com/csm"))
 
     assert result is None

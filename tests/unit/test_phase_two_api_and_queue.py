@@ -187,7 +187,12 @@ def test_feed_manifest_enqueue_and_worker_use_source_url_and_original_id() -> No
     queue = InMemoryQueue()
     store = InMemoryIngestionStore()
     service = PhaseTwoService(
-        catalog=CatalogClient(client=transport),
+        catalog=CatalogClient(
+            client=transport,
+            listing_url="https://my.opentext.com/support/products/",
+            search_url="https://my.opentext.com/api/web/support/search-results",
+            feed_url="https://my.opentext.com/api/web/feed/product",
+        ),
         queue=queue,
         store=store,
         manifest_seed="seed",
