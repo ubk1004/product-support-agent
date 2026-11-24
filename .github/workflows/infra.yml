@@ -1,17 +1,22 @@
 name: Infrastructure
 
-# Validate the Bicep for every environment, preview changes with what-if, and deploy only on a
-# manual run. Deployment targets an environment with required reviewers.
+# Validate the Bicep for every environment on pull requests and pushes. Deploy only on a manual
+# run from main, in two stages: `platform` (network, data, identity, optional Foundry and secret
+# bootstrap) and then `workloads` (Container Apps and optional API Management) once the images
+# for the chosen commit are in the private registry. Each run targets one GitHub environment,
+# which holds that environment's Azure credentials and required reviewers.
 on:
   pull_request:
     paths:
       - "infra/**"
+      - "scripts/prepare_deployment.py"
       - ".github/workflows/infra.yml"
   push:
     branches:
       - main
     paths:
       - "infra/**"
+      - "scripts/prepare_deployment.py"
       - ".github/workflows/infra.yml"
   workflow_dispatch:
     inputs:
@@ -24,6 +29,18 @@ on:
           - dev
           - tst
           - prd
+      stage:
+        description: platform first; workloads after the images are published.
+        required: true
+        default: platform
+        type: choice
+        options:
+          - platform
+          - workloads
+      image-tag:
+        description: Workloads stage only. Commit SHA of the images in ACR (defaults to this commit).
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -57,37 +74,13 @@ jobs:
       - name: Lint Bicep
         run: az bicep lint --file infra/bicep/main.bicep
 
-  check-oidc:
-    name: Check optional what-if credentials
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      available: ${{ steps.credentials.outputs.available }}
-    steps:
-      - name: Record credential availability without exposing values
-        id: credentials
-        env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        shell: bash
-        run: |
-          if [[ -n "$AZURE_CLIENT_ID" && -n "$AZURE_TENANT_ID" && -n "$AZURE_SUBSCRIPTION_ID" ]]; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::what-if skipped: OIDC secrets are unavailable to this workflow."
-          fi
-
   what-if:
-    name: Subscription what-if (${{ inputs.environment || 'dev' }})
-    if: needs.check-oidc.outputs.available == 'true'
-    needs:
-      - validate
-      - check-oidc
+    name: Preview ${{ inputs.stage }} (${{ inputs.environment }})
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment: ${{ inputs.environment || 'dev' }}
+    environment: ${{ inputs.environment }}
     permissions:
       contents: read
       id-token: write
@@ -96,6 +89,22 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+
+      - name: Prepare stage parameters and refuse placeholders
+        id: prepare
+        env:
+          PARAMETERS: infra/bicep/parameters/${{ inputs.environment }}.bicepparam
+          STAGE: ${{ inputs.stage }}
+          IMAGE_TAG: ${{ inputs.image-tag || github.sha }}
+          ACR_NAME: ${{ vars.ACR_NAME }}
+          DOCUMENTDB_ADMIN_PASSWORD: ${{ secrets.DOCUMENTDB_ADMIN_PASSWORD }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/deploy"
+          az bicep build --file infra/bicep/main.bicep --outfile "$RUNNER_TEMP/deploy/main.json"
+          az bicep build-params --file "$PARAMETERS" --outfile "$RUNNER_TEMP/deploy/compiled.json"
+          python3 scripts/prepare_deployment.py --compiled "$RUNNER_TEMP/deploy/compiled.json" \
+            --stage "$STAGE" --image-tag "$IMAGE_TAG" --registry "$ACR_NAME" \
+            --output-dir "$RUNNER_TEMP/deploy" >> "$GITHUB_OUTPUT"
 
       - name: Sign in with OIDC
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
@@ -106,14 +115,18 @@ jobs:
 
       - name: Run subscription what-if
         env:
-          PARAMETERS: infra/bicep/parameters/${{ inputs.environment || 'dev' }}.bicepparam
-        run: >-
-          az deployment sub what-if --location canadacentral
-          --template-file infra/bicep/main.bicep --parameters "$PARAMETERS"
+          LOCATION: ${{ steps.prepare.outputs.location }}
+          HAS_SECURE: ${{ steps.prepare.outputs.secure_parameters }}
+        run: |
+          secure=()
+          if [ "$HAS_SECURE" = "true" ]; then secure=(--parameters "@$RUNNER_TEMP/deploy/secure.parameters.json"); fi
+          az deployment sub what-if --location "$LOCATION" \
+            --template-file "$RUNNER_TEMP/deploy/main.json" \
+            --parameters "@$RUNNER_TEMP/deploy/parameters.json" "${secure[@]}"
 
   deploy:
-    name: Deploy infrastructure (${{ inputs.environment }}, manual only)
-    # Deploy only after a successful what-if for the same environment.
+    name: Deploy ${{ inputs.stage }} (${{ inputs.environment }}, manual only)
+    # Deploy only after a successful what-if for the same environment and stage.
     if: >-
       github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
       && needs.what-if.result == 'success'
@@ -133,14 +146,21 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Refuse placeholder parameter values
+      - name: Prepare stage parameters and refuse placeholders
+        id: prepare
         env:
           PARAMETERS: infra/bicep/parameters/${{ inputs.environment }}.bicepparam
+          STAGE: ${{ inputs.stage }}
+          IMAGE_TAG: ${{ inputs.image-tag || github.sha }}
+          ACR_NAME: ${{ vars.ACR_NAME }}
+          DOCUMENTDB_ADMIN_PASSWORD: ${{ secrets.DOCUMENTDB_ADMIN_PASSWORD }}
         run: |
-          if grep -nE "placeholder|<foundry-resource>|example\.invalid|containerapps-helloworld" "$PARAMETERS"; then
-            echo "::error::replace the placeholder values above in $PARAMETERS before deploying"
-            exit 1
-          fi
+          mkdir -p "$RUNNER_TEMP/deploy"
+          az bicep build --file infra/bicep/main.bicep --outfile "$RUNNER_TEMP/deploy/main.json"
+          az bicep build-params --file "$PARAMETERS" --outfile "$RUNNER_TEMP/deploy/compiled.json"
+          python3 scripts/prepare_deployment.py --compiled "$RUNNER_TEMP/deploy/compiled.json" \
+            --stage "$STAGE" --image-tag "$IMAGE_TAG" --registry "$ACR_NAME" \
+            --output-dir "$RUNNER_TEMP/deploy" >> "$GITHUB_OUTPUT"
 
       - name: Sign in with OIDC
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
@@ -151,8 +171,17 @@ jobs:
 
       - name: Create or update the subscription deployment
         env:
-          PARAMETERS: infra/bicep/parameters/${{ inputs.environment }}.bicepparam
-          DEPLOYMENT_NAME: psa-${{ inputs.environment }}-${{ github.run_id }}
-        run: >-
-          az deployment sub create --name "$DEPLOYMENT_NAME" --location canadacentral
-          --template-file infra/bicep/main.bicep --parameters "$PARAMETERS"
+          LOCATION: ${{ steps.prepare.outputs.location }}
+          HAS_SECURE: ${{ steps.prepare.outputs.secure_parameters }}
+          DEPLOYMENT_NAME: psa-${{ inputs.environment }}-${{ inputs.stage }}-${{ github.run_id }}
+        run: |
+          secure=()
+          if [ "$HAS_SECURE" = "true" ]; then secure=(--parameters "@$RUNNER_TEMP/deploy/secure.parameters.json"); fi
+          az deployment sub create --name "$DEPLOYMENT_NAME" --location "$LOCATION" \
+            --template-file "$RUNNER_TEMP/deploy/main.json" \
+            --parameters "@$RUNNER_TEMP/deploy/parameters.json" "${secure[@]}"
+
+      - name: Show deployment outputs
+        env:
+          DEPLOYMENT_NAME: psa-${{ inputs.environment }}-${{ inputs.stage }}-${{ github.run_id }}
+        run: az deployment sub show --name "$DEPLOYMENT_NAME" --query properties.outputs --output json

@@ -13,7 +13,7 @@ Use this reference when the target project is written in Python.
 
 ## Installation
 
-When the relevant implementation phase is approved, verify the current Python package and release status in official documentation. Pin the selected version in the project's dependency manifest and use the approved dependency manager. Do not install dependencies during planning.
+Verify the current Python package and release status in official documentation before changing the version. The project pins its version in `pyproject.toml` and `uv.lock`; change it through `uv`.
 
 ## Python-specific guidance
 

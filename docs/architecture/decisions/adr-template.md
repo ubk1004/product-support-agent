@@ -11,7 +11,7 @@ keywords:
 
 ## Status
 
-Proposed, accepted, superseded, or deprecated.
+Proposed, accepted, superseded (by ADR-NNNN), or deprecated.
 
 ## Context
 
@@ -23,7 +23,7 @@ State the selected approach and its boundaries.
 
 ## Rationale
 
-Explain why the selected approach best fits the approved requirements.
+Explain why the selected approach best fits the requirements.
 
 ## Alternatives considered
 

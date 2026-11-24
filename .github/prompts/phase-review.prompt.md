@@ -1,13 +1,13 @@
 ---
-description: "Review a product support implementation phase against its exit criteria"
-argument-hint: "phase=..."
+description: "Review a change against the architecture, the guardrails, and the documentation"
+argument-hint: "change=..."
 ---
 
-# Phase review
+# Change review
 
-Review the requested phase in `docs/implementation-plan.md` and the current workspace.
+Review the requested change in the current workspace against `.github/copilot-instructions.md` and `docs/architecture/architecture-overview.md`.
 
-1. Identify prerequisites, unresolved decisions, approved scope, deliverables, and measurable exit criteria.
-2. Compare available evidence with each exit criterion. Distinguish passed, failed, and not verified.
-3. Identify security, privacy, citation, and test evidence gaps relevant to the phase.
-4. Report whether the phase's exit criteria pass. Under ADR-0007 demo delivery mode, continue to the next phase when they pass; do not wait for approval.
+1. Identify what the change does, the decisions it depends on, and anything it leaves undecided.
+2. Check its tests and the required checks. Distinguish passed, failed, and not verified.
+3. Identify security, privacy, citation, and test gaps.
+4. List the documents that must change with it and whether they did.

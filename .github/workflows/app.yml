@@ -1,13 +1,25 @@
 name: Application
 
-# Build and deploy the web app, the API, and the ingestion job (agents run inside the API and
-# the job). Images are tagged with the commit SHA and deployed by that tag, never by "latest".
+# Build, publish, and deploy the web app, the API, and the ingestion job (the agent runs inside
+# the API). Images are tagged with the commit SHA and deployed by that tag, never by "latest".
+#
+# The container registry has public network access disabled, so publishing and deploying run on
+# a self-hosted runner inside the virtual network, labelled `<environment>-vnet`.
 on:
   push:
     branches:
       - main
   workflow_dispatch:
     inputs:
+      environment:
+        description: Target environment for publish and deploy.
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - tst
+          - prd
       image-tag:
         description: Commit SHA of images already in ACR to deploy (defaults to this commit).
         required: false
@@ -17,7 +29,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: app-${{ github.ref }}
+  group: app-${{ github.ref }}-${{ inputs.environment || 'dev' }}
   cancel-in-progress: false
 
 jobs:
@@ -55,13 +67,15 @@ jobs:
           done
 
   publish:
-    name: Push images to ACR
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    name: Push images to ACR (${{ inputs.environment || 'dev' }})
+    # Pushes to main publish to dev; a manual run can publish to any environment.
+    if: >-
+      github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: build
-    # The registry has public network access disabled; only a runner inside the VNet can push.
-    runs-on: [self-hosted, linux, x64, dev-vnet]
+    runs-on: [self-hosted, linux, x64, "${{ inputs.environment || 'dev' }}-vnet"]
     timeout-minutes: 30
-    environment: dev
+    environment: ${{ inputs.environment || 'dev' }}
     permissions:
       contents: read
       id-token: write
@@ -95,12 +109,13 @@ jobs:
           docker push "${registry}/product-support-web:${IMAGE_TAG}"
 
   deploy:
-    name: Deploy Container Apps (manual only)
+    name: Deploy Container Apps (${{ inputs.environment }}, manual only)
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
-    needs: build
-    runs-on: ubuntu-latest
+    needs: publish
+    # The image check reads the private registry, so it runs inside the virtual network too.
+    runs-on: [self-hosted, linux, x64, "${{ inputs.environment }}-vnet"]
     timeout-minutes: 20
-    environment: dev
+    environment: ${{ inputs.environment }}
     permissions:
       contents: read
       id-token: write

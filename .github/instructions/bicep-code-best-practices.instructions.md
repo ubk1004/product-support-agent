@@ -5,9 +5,9 @@ applyTo: '**/*.bicep, **/*.bicepparam, **/bicepconfig.json'
 
 ## Project constraints
 
-- Follow the Phase 7 scope and approval gates in `docs/implementation-plan.md`.
-- The application stack is design-only. Do not deploy it or run subscription-scoped validation without explicit approval.
-- Pin suitable AVM versions, design for Canada Central, and keep the separately approved network slice distinct from the full stack.
+- Follow `.github/copilot-instructions.md` and `infra/README.md`.
+- Do not deploy or run subscription-scoped what-if without the user's approval.
+- Keep the two-stage model (`deployWorkloads`), keep placeholders out of deployments (`scripts/prepare_deployment.py`), and do not hard-code a region.
 
 ## Naming Conventions
 

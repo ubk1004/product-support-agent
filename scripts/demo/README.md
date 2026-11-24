@@ -31,17 +31,21 @@ chosen, and then selects it.
    podman compose up --build -d
    ```
 
-2. Install the recorder and record. Playwright's Chromium must be installed
-   (`npx playwright install chromium` once):
+2. Install the recorder, install Playwright's Chromium once, and record. The
+   documentation must already be ingested (see the
+   [local development guide](../../docs/operations/local-development.md)):
 
    ```powershell
    cd scripts/demo
    npm install
+   npx playwright install chromium
    npm run record
    ```
 
 The run takes a few minutes because it waits for each live answer. Set
-`DEMO_BASE_URL` to record against another address.
+`DEMO_BASE_URL` (default `http://127.0.0.1:3000`) to record another web app and
+`DEMO_DASHBOARD_URL` (default `http://127.0.0.1:18888`) to capture another
+telemetry dashboard.
 
 Answers come from a language model, so wording differs between recordings.
 Review the new video before committing it. If an answer is wrong or a step

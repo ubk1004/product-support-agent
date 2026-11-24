@@ -1,8 +1,8 @@
 ---
 title: Product Support Agent Risks and Assumptions
-description: Phase 0 risk and assumption register for the local-first product support demo
+description: Open risks, the responses in place, and the assumptions the demo relies on
 author: Udaybhanu Karmakar
-ms.date: 2026-11-22
+ms.date: 2026-11-23
 ms.topic: reference
 keywords:
   - risk register
@@ -11,44 +11,43 @@ keywords:
 estimated_reading_time: 6
 ---
 
-## Status
+## How to read this register
 
-This Phase 0 risk and assumption register is preliminary. Detailed STRIDE and
-AI-specific threats are tracked in the
-[Phase 0b threat register](../security/threat-register.md). Ratings are
-qualitative and require review.
+Ratings are qualitative. The response column describes what exists today, and
+**Next** names the work that would retire or reduce the risk. Security threats
+are rated in the [threat register](../security/threat-register.md); this
+register covers delivery, data, platform, and operational risks.
 
 ## Risks
 
-| ID | Risk | Rating | Proposed response | Owner | Phase |
-|---|---|---|---|---|---:|
-| R-01 | The feed parsed into 1,302 unique products, but the product pages are client-rendered and contain no product text; the old heuristic flagged them on navigation links. | Resolved for content | Product pages are now the catalog only. Documentation comes from the source map, and the heuristic was narrowed to real login walls. | Product owner and ingestion lead | 0, 2, 3 |
-| R-02 | The search API returned 401; protected support content could be misclassified as missing or retried with unsafe credentials. | High | Treat 401/403 and login redirects/content as protected skips. Never authenticate or bypass access restrictions. | Ingestion lead | 2 |
-| R-03 | Random product selection could vary between runs and make the UI and evaluation irreproducible. | Medium | Parameterize the maximum at 100; persist and version one exact random manifest; require explicit replacement and show product-level ingestion outcomes. | Product owner | 2 |
-| R-04 | The user requests query/response retention for demo review, but notice, access, redaction, retention, and deletion rules are not approved. | High | Add global and per-session off controls, default retention off, and do not retain real content until the Phase 0b privacy policy is approved. | Privacy owner, TBD | 0b, 6 |
-| R-05 | Local access to Azure AI Search and Foundry depends on user-supplied service configuration, network access, quota, and authentication. | Medium | Keep unit/integration tests deterministic; document connectivity and quota prerequisites for the local demo. | Demo operator, TBD | 1, 6 |
-| R-06 | The model may repeat injected source instructions, invent citations, or render unsafe source links. | High | Treat source text as untrusted; render only server-resolved URLs from retrieved evidence; test injection and rendering paths. | Agent lead | 0b, 4, 5 |
-| R-07 | The designed cloud network and identity may not match current regional SKU, quota, or service constraints. | Medium | Bicep build and lint pass; the subscription what-if was blocked by an expired token, so validate live service constraints with an authorized session before deployment. | Cloud architect, TBD | 7 |
-| R-09 | Documentation source terms are unverified. The `www.microfocus.com/legal` page returned 403 to automated access, and public access does not establish reuse rights. | High | Review the terms manually and record the result before the first ingestion run; until then, run only `--discover-only` or offline tests. | Product owner | 3 |
-| R-10 | A scheduled indexer could repeat requests after a crash, overlap with another run, or keep hitting failing sources. | Medium | Durable per-URL fetch state, a 24-hour freshness window, conditional GETs, classified backoff, product fail-fast, host abort on 429, a request budget, and a single-runner lease (ADR-0006). | Ingestion lead | 3 |
-| R-11 | The curated source map covers 10 of 100 manifest products and is biased toward the former Micro Focus documentation portals. | Medium | The home page coverage view discloses indexed products first and labels the rest as not covered; no content is invented. | Product owner | 3, 5 |
-| R-08 | “Working demo” may not establish that target users can complete useful support tasks. | Medium | Define users, priority tasks, task success measures, and a moderated usability study in Phase 0/5. | Product owner | 0, 5 |
+| ID | Risk | Rating | Response in place | Next |
+|---|---|---|---|---|
+| R-01 | **Narrow source coverage.** Only 10 of the 100 sampled products have an anonymous documentation source in the source map, and those lean toward the former Micro Focus documentation portals. The catalog pages are client-rendered and carry no documentation text. | Medium | The coverage view lists indexed products first and labels the rest "not covered"; the agent refuses rather than guessing; the limit is stated in the README | Add reviewed sources to the source map as they are identified |
+| R-02 | **Protected content.** The OpenText search API returns 401 without credentials, and many product resources require a customer account. | High | 401, 403, sign-in redirects, and sign-in content are skipped, recorded with a reason, and backed off for 30 days; the service never authenticates | None; this is a boundary of the demo |
+| R-03 | **Irreproducible sample.** A random product selection could differ between runs and break the coverage view and the evaluation. | Medium | One manifest is generated from a fixed seed (`approved-demo-v1`), versioned in git, hard-capped at 100, and replaced only by an explicit script run | None |
+| R-04 | **Answer quality.** The latest evaluation found the expected page in the top five for 12 of 15 answerable questions; model-judged claim support ranged from 71% to 83% over repeated runs, against an 80% target. All 6 refusal cases held. The set is small, synthetic, and not human-reviewed. | High | Server-side citation binding guarantees that every link is real; unsupported text is possible but bounded by retrieval-only prompts | A larger, human-reviewed evaluation set and repeated runs before any customer-facing use |
+| R-05 | **Source terms.** Public access does not establish a right to reuse documentation content. The legal page returned 403 to automated access. | High | Anonymous, `robots.txt`-honouring, low-volume access for a private demo only | Legal review before any wider use |
+| R-06 | **Source load and stale state.** A repeated, overlapping, or retried run could burden the source sites. | Medium | Request budget, 1-second host spacing, freshness window, backoff, fail-fast, and a single-run lease ([ADR-0006](decisions/adr-0006-periodic-resumable-source-ingestion.md), [ADR-0009](decisions/adr-0009-queue-driven-ingestion.md)) | Distributed rate limiting before running more than one worker |
+| R-07 | **Stuck ingestion lease.** If a run is killed, its lease blocks the next run for up to 6 hours. | Low | Documented clear-down in [support ownership](support-ownership.md#runbooks) | A heartbeat that renews or releases the lease |
+| R-08 | **Model capacity and region.** GPT-5 GlobalStandard is not offered in every region, quotas can be low, and HTTP 429 from the model surfaces to users as an error. GlobalStandard processing is not tied to one region. | Medium | Region and quota prerequisites are in the [cloud setup guide](../../infra/README.md); the API bounds concurrency and returns a 502 without internal detail when the model call fails | Provisioned or data-zone deployments where capacity or residency matters |
+| R-09 | **Keys for Search and Foundry.** Both services are called with API keys held in `.env` or Key Vault, and Foundry's endpoint is public. | Medium | Keys stay out of git and logs; in Azure they live in Key Vault behind a private endpoint; Search is private | Entra ID access with least-privilege roles; key rotation |
+| R-10 | **Public API Management gateway.** In external VNet mode, the gateway is reachable from the internet and protected by a subscription key and a rate limit only. The web app does not use it. | Medium | Rate limit, body-size limit, only two operations exposed | Entra ID or JWT validation, WAF, and a decision on whether the web app should route through it |
+| R-11 | **Private registry needs a runner in the network.** Images cannot be pushed from a hosted runner or a laptop once the registry is private. | Medium | The pipelines publish and deploy from self-hosted runners labelled `<env>-vnet`; infrastructure deploys in two stages | Document or automate runner provisioning |
+| R-12 | **Region limits for the Mongo-compatible store.** Azure DocumentDB Free is not offered in every region, and there is no paid fallback in that mode. | Low | Cosmos DB for MongoDB is the default; the free option is explicit and region-checked in the setup guide | None |
+| R-13 | **Cost of retained resources.** API Management Developer, Search Basic, the Premium registry, and Foundry deployments bill while they exist. | Medium | Resource sizes are the smallest that meet the design; cleanup steps are in the setup guide | Budgets and cost alerts |
+| R-14 | **Demo does not prove usefulness.** A working demo does not show that target users can finish real support tasks. | Medium | Five user tasks are defined in the [solution architecture](architecture-overview.md#purpose-and-scope); the interface follows basic accessibility practice | Moderated usability study and a WCAG 2.2 AA audit before a pilot |
+| R-15 | **No operations cover.** There are no alerts, service level objectives, on-call rotation, or backups. | Medium | Telemetry is collected; runbooks cover the known failure modes | Define SLOs and alerts; assign owners |
+| R-16 | **CI never run on GitHub.** The workflows are linted and unit-tested offline but have not executed on GitHub-hosted or self-hosted runners. | Medium | Offline tests check the workflow structure, the placeholder guard, the runner labels, and the parameter preparation | Run the pipelines once in a `tst` environment |
 
 ## Assumptions
 
-| ID | Assumption | Validation or decision |
+| ID | Assumption | If it fails |
 |---|---|---|
-| A-01 | Product and support pages may be accessed only when publicly available without authentication. | Confirm source terms and permitted automated access before Phase 2. |
-| A-02 | The local demo uses the user's Azure AI Search and Foundry deployments; no local model or vector store is introduced. | Confirm endpoint/deployment configuration and Entra ID or key-based auth in Phase 0. |
-| A-03 | The demo catalog uses a random, stable manifest with a parameterized hard maximum of 100 products. | Persist the selected IDs and outcomes; do not exceed the hard maximum or replace a manifest without an explicit operation. |
-| A-04 | MongoDB is the local metadata/canonical-data candidate; Azure AI Search is the derived search index. | Approve system-of-record ownership and retention before Phase 2. |
-| A-05 | The MVP is local-first. The Azure stack was deployed only as an approved isolated test. | Keep any further resource or workload deployment behind separate authorization. |
-| A-06 | Query/response retention is a requested demo feature, but must be disabled until policy approval. | Approve the privacy impact assessment, notice, access, redaction, retention, and deletion controls before enabling it. |
-| A-07 | User questions, retrieved text, and provider responses are untrusted inputs. | Enforce validation, provenance, redaction, and abuse-case tests. |
-
-## Source probe evidence
-
-The initial probe is summarized in the
-[decision register](./decision-register.md#initial-source-probe). The result is
-not sufficient to claim that catalog discovery or fallback behavior is verified.
-No product content was stored.
+| A-01 | Product and support pages are used only when publicly available without authentication. | Skip the source; never authenticate |
+| A-02 | The demo uses a Foundry deployment and an Azure AI Search service supplied by the operator; no local model or vector store is added. | The agent cannot answer; local tests still run with fakes |
+| A-03 | The demo catalog is a stable random sample with a hard maximum of 100 products. | Regenerate the manifest deliberately and re-ingest |
+| A-04 | The Mongo-compatible store is the system of record and Azure AI Search is a derived index that can be rebuilt from it. | Re-run ingestion to rebuild the index |
+| A-05 | Query and response retention is off. | Complete the [privacy impact assessment](../security/privacy-impact-assessment.md) decisions first |
+| A-06 | User questions, retrieved text, and model output are untrusted. | Controls in the [security posture](../security/security-posture.md) apply |
+| A-07 | Operators deploy to a subscription they own, with permission to create resources and role assignments. | The infrastructure workflow fails at what-if |
+| A-08 | Azure region availability, quotas, and prices change; the repository records a sample choice, not a guarantee. | Re-check availability before deploying |

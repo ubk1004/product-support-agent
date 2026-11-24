@@ -1,8 +1,8 @@
 ---
 title: Product Support Agent Threat Register
-description: Phase 0b threat assessment across the local MVP trust boundaries
+description: Assets, trust boundaries, and rated threats with the controls in place and the work left for production
 author: Udaybhanu Karmakar
-ms.date: 2026-11-21
+ms.date: 2026-11-23
 ms.topic: reference
 keywords:
   - threat modeling
@@ -11,122 +11,78 @@ keywords:
 estimated_reading_time: 9
 ---
 
-## Status and method
+## Method
 
-The user approved this register with conditions at the Phase 0b gate. Ratings
-are qualitative pre-mitigation assessments. Mitigations are planned unless the
-relevant phase review records implemented evidence. The register uses STRIDE across the architecture trust boundaries and
-includes AI-specific risks from the
+The register applies STRIDE across the trust boundaries in the
+[solution architecture](../architecture/architecture-overview.md#trust-boundaries)
+and adds AI-specific risks from the
 [OWASP Top 10 for LLM Applications](https://owasp.org/www-project-top-10-for-large-language-model-applications/)
-and [MITRE ATLAS](https://atlas.mitre.org/).
+and [MITRE ATLAS](https://atlas.mitre.org/). Ratings are qualitative and
+describe the risk before controls.
 
-## Assets and data inventory
+The status column uses three values:
 
-| ID | Asset or data | Classification | Owner | Location and flow | Proposed retention |
-|---|---|---|---|---|---|
-| A-01 | Product manifest, source map, product names/IDs/URLs, per-product ingestion outcomes, and coverage status | Internal demo metadata | Product owner | Versioned JSON and MongoDB to the coverage API and Next.js UI | Retain only the current approved manifest, source map, and run outcomes; deletion policy pending |
-| A-02 | Public-source content, canonical documents, chunks, and embeddings | Untrusted source material | Ingestion/data owner | Worker, MongoDB, Azure AI Search | Store only permitted public content; freshness and deletion period pending |
-| A-03 | User queries and assistant responses | Potentially sensitive user content | Privacy owner, TBD | Browser, Next.js, FastAPI, agent, LiteLLM, Foundry; optional restricted MongoDB collection | Retention is disabled until the privacy policy and provider handling are approved; if enabled, redacted content only for the configured TTL |
-| A-04 | Source IDs, URLs, and retrieval excerpts | Public provenance plus untrusted text | Search/data owner | Azure AI Search, agent, API, Next.js | Retain with indexed content; never accept model-authored source URLs |
-| A-05 | Foundry, Azure AI Search, MongoDB, and gateway credentials/configuration | Secret | Application maintainer | Developer environment or approved secret store | Do not commit, log, trace, or include in fixtures |
-| A-06 | Queue messages, run IDs, status, timestamps, retry/dequeue counts, source fetch state, and the run lease | Internal operational metadata | Ingestion owner | Azurite/Storage Queue, workers, MongoDB | Fetch state is kept while a source is in the map; deletion period pending |
-| A-07 | Logs, traces, and metrics | Internal operational telemetry | Application/security owner | Local collector or selected destination | Minimized metadata only; no query/response content before policy approval |
+* **Mitigated**: the control is implemented and covered by an automated test.
+* **Partly mitigated**: the control is implemented for the demo; the residual
+  work column lists what production still needs.
+* **Open**: not built; the work is a production gap.
+
+No residual risk has been formally accepted by an accountable owner, because
+named owners have not been assigned ([support ownership](../architecture/support-ownership.md)).
+
+## Assets and data
+
+| ID | Asset or data | Classification | Where it flows | Retention |
+|---|---|---|---|---|
+| A-01 | Product manifest, source map, per-product ingestion outcomes, coverage status | Internal demo metadata | Versioned JSON files and the Mongo-compatible store, to the coverage API and the web app | Current manifest and source map in git; run outcomes kept in the store |
+| A-02 | Public documentation text, canonical documents, chunks, embeddings | Untrusted source material | Ingestion job, the store, Azure AI Search | Public content only; replaced when the source changes and deleted when a page leaves the source map |
+| A-03 | User questions and assistant answers | Potentially sensitive user content | Browser, web app, API, agent, Foundry, Azure AI Search | Not stored. Sent to Foundry and Azure AI Search to produce an answer |
+| A-04 | Evidence IDs, source URLs, and retrieved excerpts | Public provenance plus untrusted text | Search, agent, API, web app | Kept with the indexed content |
+| A-05 | Foundry, Search, database, and gateway credentials | Secret | `.env` locally; Key Vault in Azure | Never committed, logged, or traced |
+| A-06 | Queue messages, run records, fetch state, and the run lease | Internal operational metadata | Queue, ingestion job, the store | Fetch state is kept while the source is in the source map |
+| A-07 | Logs, traces, and metrics | Internal operational telemetry | Aspire dashboard locally; Log Analytics and Application Insights in Azure | Metadata only; 30 days in Log Analytics |
 
 ## Trust boundaries
 
-| Boundary | Crossing data or action | Main concern |
+| Boundary | Crossing | Main concern |
 |---|---|---|
-| TB-01 External user/browser to Next.js | User input, rendered answer, links, optional retention choice | Malicious input, unsafe rendering, unintended retention |
-| TB-02 Next.js to FastAPI and agent | Server-side coverage fetch; planned chat request, session metadata, response | Schema bypass, resource exhaustion, session mix-up |
-| TB-03 Agent/LiteLLM to Foundry | Prompt, retrieved evidence, model output | Prompt injection, provider data handling, quota abuse |
-| TB-04 Workers to public sources | Anonymous catalog requests, robots.txt, source map seeds, documentation pages, and returned content | SSRF, protected content, source load, hostile content |
-| TB-05 Catalog/worker to queue and MongoDB | Product references, run status, canonical records | Replay, tampering, duplicate work, excessive retention |
-| TB-06 Worker/agent to Azure AI Search | Documents, embeddings, queries, results | Unauthorized access, index tampering, stale/poisoned data |
-| TB-07 Services to telemetry | Operational events; optionally retained content only after approval | Secret/content leakage and excessive access |
-| TB-08 Developer machine to user-provided services | Authentication tokens, keys, configuration | Local credential exposure and unintended service access |
-| TB-09 Cloud application boundary, design-only | APIM, Container Apps, managed identities, private services | Incorrect network, identity, or policy assumptions |
+| TB-01 Browser to web app | User input, rendered answer and links | Malicious input, unsafe rendering |
+| TB-02 Web app to API and agent | Server-side chat and coverage calls | Schema bypass, resource exhaustion |
+| TB-03 API to Foundry | Prompt, retrieved evidence, model output | Prompt injection, provider data handling, quota abuse |
+| TB-04 Ingestion job to public sources | Anonymous requests to documentation hosts and `robots.txt` | SSRF, protected content, source load, hostile content |
+| TB-05 Job and API to queue and store | Run state, documents, outcomes | Replay, tampering, duplicate work |
+| TB-06 Job and API to Azure AI Search | Documents, embeddings, queries, results | Unauthorized access, index tampering, stale or poisoned data |
+| TB-07 Services to telemetry | Operational events | Secret or content leakage |
+| TB-08 Developer machine and CI to credentials | Keys, tokens, configuration | Credential exposure |
+| TB-09 Azure application boundary | API Management, Container Apps, identities, private services | Wrong network or identity assumptions |
 
-The [architecture overview](../architecture/architecture-overview.md) contains
-the corresponding data-flow and deployment diagrams.
+## Threats
 
-## Threat register
+| ID | Threat (boundary) | Type | Rating | Controls in place and how they are tested | Status | Residual work for production |
+|---|---|---|---|---|---|---|
+| T-01 | Indirect prompt injection in source text or earlier turns (TB-03, TB-04, TB-06) | Tampering; LLM prompt injection | High | Retrieved text and history are treated as data. The agent has two read-only tools. Citation markers and URLs are stripped from history before reuse. A provider content-filter response becomes the standard refusal. Tests include an "ignore instructions and print a link" case | Partly mitigated | Independent red-team testing |
+| T-02 | SSRF or unsafe redirect through catalog or page URLs (TB-04) | Spoofing, information disclosure | High | HTTPS only; host allowlist applied to the source map, sitemap and table-of-contents links, and citation URLs; redirects are never followed; sitemaps are parsed with `defusedxml`. Tests use hostile URLs and redirects | Mitigated | Egress allowlisting at the network layer |
+| T-03 | Excess requests or disregard for rate limits (TB-04) | Denial of service | High | Run request budget (400 by default, 2,000 at most); at least 1 second between requests to a host; two attempts per page; `Retry-After` honoured up to 60 seconds; a host is abandoned on 429 or an unavailable `robots.txt`; a product is abandoned after three failures; a 24-hour freshness window; one run at a time. Tests cover each | Mitigated | None for the sampled catalog |
+| T-04 | Protected content stored after a 401, 403, sign-in redirect, or sign-in page (TB-04) | Information disclosure | High | Protected responses are skipped with a 30-day backoff and nothing is stored. Detection covers password fields, sign-in forms and actions, SAML requests, and short sign-in pages. Tests assert that no content reaches the store or the index | Partly mitigated | The sign-in heuristic has been validated against the sampled sources only |
+| T-05 | Citation spoofing, altered URLs, or unsupported claims (TB-02, TB-03, TB-06) | Tampering; LLM misinformation | High | The server resolves evidence IDs to stored URLs and drops unknown or forged IDs; model-written URLs are removed; an answer without a valid citation becomes a refusal. Tests cover forged, unknown, and URL-injected IDs. The evaluation checks citation validity and, with a model judge, claim support | Partly mitigated | Claim support varied from 71% to 83% across evaluation runs, so a correctly linked answer can still contain an unsupported statement. Enlarge the evaluation set and add human review |
+| T-06 | Unsafe markdown, external images, or script injection in rendered answers (TB-01, TB-02) | Information disclosure, elevation of privilege | High | Answers render as plain text; links come only from the server-provided citations array; no model HTML or markdown is rendered | Partly mitigated | Browser security review and a content security policy |
+| T-07 | Retained questions and answers expose personal or sensitive content (TB-01, TB-07) | Information disclosure; privacy | High | No retention feature exists. The setting is off by default and enabling it requires a reviewer role. Telemetry carries no question or answer text | Mitigated by absence | If retention is added: notice, redaction, access control, TTL, and deletion per the [privacy impact assessment](privacy-impact-assessment.md) |
+| T-08 | Spend or quota exhaustion from chat and embedding use (TB-02, TB-03) | Denial of service | High | Question size, history, tool calls, elapsed time, and concurrency are bounded in the API; the web route bounds body size and time; API Management applies a rate limit and body limit when deployed. Provider errors are returned without internals | Partly mitigated | Per-user budgets, quota and cost alerts |
+| T-09 | Stale or poisoned index content survives source changes (TB-04, TB-06) | Tampering, repudiation | Medium | Documents carry hashes, fetch time, and stable IDs; unchanged pages are not re-indexed; pages that leave the source map are deleted; the index is written before the canonical record, so an interrupted run retries | Mitigated | Index reconciliation job |
+| T-10 | Credentials or content leak through configuration, logs, traces, or test output (TB-07, TB-08) | Information disclosure | High | Secrets live outside git (`.env` is ignored; Key Vault in Azure). One redaction filter covers console and exported logs. Prompt and response capture is off. Client addresses and user agents are dropped from spans. Gitleaks runs in CI. Tests cover labelled secrets, credentialed URIs, SAS signatures, bearer tokens, JWTs, cookies, e-mail addresses, and access-log query strings | Partly mitigated | Redaction is pattern-based; question and answer text must never be logged |
+| T-11 | Unauthorized access to Azure AI Search or Foundry through leaked keys (TB-06, TB-08) | Spoofing, tampering, information disclosure | High | Keys are held in `.env` or Key Vault; in Azure Search sits behind a private endpoint with public access disabled; the index name is namespaced | Partly mitigated | Entra ID with least-privilege roles instead of keys; key rotation |
+| T-12 | Queue replay or poison messages cause repeated work (TB-05) | Denial of service, tampering | Medium | Outcomes are recorded before a message is deleted; handlers are idempotent; a message delivered five times is dead-lettered to the poison queue; budget exhaustion defers rather than fails. Tests cover duplicates and exhausted retries | Mitigated | Alert on poison-queue depth |
+| T-13 | Dependency, action, or image compromise (TB-08, TB-09) | Tampering, elevation of privilege | Medium | Locked dependencies; GitHub Actions pinned to commit SHAs; non-root images; `pip-audit`, `npm audit`, CodeQL, gitleaks, and Dependabot in CI | Partly mitigated | Image scanning, SBOM, signing, and provenance; branch protection with required checks |
+| T-14 | Cross-user exposure in an anonymous demo (TB-01, TB-02) | Spoofing, information disclosure | Medium | Local services bind to `127.0.0.1`; conversation lives in the browser tab only; no user data is stored server-side | Partly mitigated | End-user sign-in before any wider access |
+| T-15 | Wrong cloud identity, network, or DNS assumptions expose a service (TB-09) | Spoofing, tampering, information disclosure | High | Data services, Key Vault, and the registry have public access disabled behind private endpoints and private DNS; the API has internal ingress; each identity holds roles scoped to one resource. The Bicep is built, linted, and what-if checked | Partly mitigated | Policy-as-code scanning of the templates; periodic access review |
+| T-16 | Model output or injected content introduces a misleading link (TB-01, TB-02, TB-03) | Tampering; LLM output manipulation | High | Same controls as T-05 and T-06; the injection regression test checks that no link outside the evidence is returned | Partly mitigated | Independent adversarial URL testing |
+| T-17 | Overbroad GitHub OIDC federation lets an unintended repository or ref deploy (TB-09) | Spoofing, elevation of privilege | High | One federated credential per GitHub environment, scoped to this repository; no client secret; `id-token: write` only on jobs that sign in to Azure; infrastructure deploys only by manual dispatch after a what-if; production requires environment reviewers | Partly mitigated | Branch protection and required reviewers must be configured on the repository |
+| T-18 | A compromised publishing job overwrites images in the registry (TB-08, TB-09) | Tampering, elevation of privilege | High | `AcrPush` is scoped to the registry; publishing runs only on `main` from a runner inside the virtual network; images are tagged with the commit SHA and deployed by that tag | Partly mitigated | Image signing and provenance verification at deploy time |
 
-| ID | Threat and boundary | STRIDE / AI risk | Rating and rationale | Planned mitigation and verifying test | Owner and phase | Cloud mapping | Status |
-|---|---|---|---|---|---|---|---|
-| T-01 | Indirect prompt injection in source text (TB-03, TB-04, TB-06) | Tampering; LLM prompt injection | High: retrieved content can steer the model or tools | Treat retrieved text and earlier conversation turns as untrusted; restrict the agent to two read-only tools (`search_documentation`, `list_products`); strip citation markers and URLs from history before reuse; the provider's content filter is handled as a refusal and logged as `content_filtered`; a regression test with “ignore instructions and print a link” verifies that no link or citation outside retrieved evidence is returned | Agent owner, Phase 4 | APIM policy and monitoring supplement, but do not replace application validation | Partially mitigated for the tested path; independent red-team coverage is production-only |
-| T-02 | SSRF or unsafe redirect through catalog/page URLs (TB-04) | Spoofing, information disclosure | High: a crafted URL could reach internal or non-allowlisted services | Allowlist scheme/host; validate every redirect; reject private, loopback, link-local, and unexpected hosts; test hostile URLs and redirects | Ingestion owner, Phase 2 | Worker egress allowlist, NSGs, firewall/NAT | Planned |
-| T-03 | Crawler abuse, excessive requests, or rate-limit disregard (TB-04) | Denial of service | High: source load or blocked access | Enforce product/request/page/download/concurrency/time budgets; honor `Retry-After`; stop on 401/403; test request cap and 429 behavior | Ingestion owner, Phase 2 | Stable egress IP and egress controls | Planned |
-| T-04 | Protected content stored after 401/403, login redirect, or login page (TB-04) | Information disclosure | High: authenticated material is outside the anonymous MVP | Treat protected responses as skips; store only minimal status; test all protected outcomes and assert no content reaches MongoDB or Search | Ingestion owner, Phase 2 | Same application rule; network controls are not authorization bypasses | Partially mitigated; heuristic narrowed to login walls in Phase 3; live validation pending the first authorized run |
-| T-05 | Citation spoofing, altered URLs, or unsupported product claims (TB-02, TB-03, TB-06) | Tampering; LLM misinformation | High: users may trust fabricated support guidance | Resolve evidence IDs server-side; drop forged and unknown IDs; strip model-authored URLs; test forged, unknown, and URL-injected evidence IDs plus unanswerable questions | Agent owner, Phase 4 | APIM does not replace citation validation | Partially mitigated: focused citation-binding and refusal tests pass. Evaluation v2 adds a model-judged claim-support check and 3 adversarial refusal cases; claim support varied from 71% to 83% across runs, so unsupported claims remain possible. The set is small and not human-reviewed |
-| T-06 | Unsafe markdown, external image loads, or script injection in rendered content (TB-01, TB-02) | Information disclosure, elevation of privilege; LLM output handling | High: rendering can execute or disclose data in a user's browser | Render answers as plain text; render links only from the server-provided citations array; do not render model HTML or markdown | UI owner, Phase 5 | WAF/APIM may add defense in depth; output encoding remains required | Partially mitigated by plain-text rendering; full XSS and browser-security review is production-only |
-| T-07 | Query/response retention exposes personal or sensitive content (TB-01, TB-07) | Information disclosure; privacy risk | High: requested demo retention still lacks final policy/provider approval | Keep the global flag off until approval; use the 7-day configurable TTL; show notice and per-session opt-out; redact before persistence and fail closed; restrict access to the configured reviewer role; test off modes and synthetic sensitive values | Privacy owner, TBD; Phase 0b/6 | Managed identity, RBAC, Key Vault, monitored retention controls | Pending policy approval |
-| T-08 | Denial-of-wallet or quota exhaustion from chat/embedding use (TB-02, TB-03) | Denial of service; resource abuse | High: unbounded requests can create cost or starve the user's deployments | Bound message size, tool calls, elapsed time, and in-process concurrency; surface provider errors without internals. Add per-user/global rate limits, budgets, and quota alerts before public access | AI owner, Phase 4/6 | APIM quotas/rate limits and Azure Monitor alerts | Partially mitigated: request bounds are implemented; global rate limits, per-user budgets, and alerts are production-only |
-| T-09 | Poisoned or stale index content survives source updates/deletions (TB-04, TB-06) | Tampering, repudiation | Medium: stale evidence can produce incorrect answers | Store source hash, timestamps, parser version, and stable IDs; reconcile updates/deletions; test replay, changed content, and removed sources | Search/data owner, Phase 3 | Search RBAC, private endpoint, index separation | Planned |
-| T-10 | Credentials or sensitive content leak through config, logs, traces, or test output (TB-07, TB-08) | Information disclosure | High: a leak can expose models, search data, or user content | Keep secrets outside git; use redaction; exclude content from logs and spans; test that request/response text is not logged | Application/security owner, Phases 1/6 | Key Vault, managed identity, OIDC, RBAC | Partially mitigated: metadata-only request ID, latency, token-count, and outcome logging; query/response retention remains off; trace export is not configured |
-| T-11 | Unauthorized access to or tampering with Azure AI Search, including developer credential exposure (TB-06, TB-08) | Spoofing, tampering, information disclosure | High: index access can expose or alter evidence | Keep API keys in local environment configuration; use the `product-support-*` index namespace. Add Entra ID, least privilege, private endpoint, and endpoint restrictions before production | Search owner, Phases 1/3/7 | Private endpoint, RBAC, private DNS, NSGs | Partially mitigated: local key handling and index namespace are in place; cloud identity and network controls are production-only |
-| T-12 | Queue replay or poison messages cause duplicate work or repeated source requests (TB-05) | Denial of service, tampering | Medium: queue delivery can repeat and exhaust limits | Make handlers idempotent; cap dequeue attempts; move poison items to a poison queue; track run completion; test duplicates and exhausted retries | Ingestion owner, Phase 2 | Storage Queue and scoped identity | Planned |
-| T-13 | Dependency, action, or container-image compromise (TB-08, TB-09) | Tampering, elevation of privilege | Medium: build artifacts can introduce malicious code | Lock dependencies; pin GitHub Actions by SHA; run dependency audits and CI checks; add image scanning and provenance before publishing | Build/security owner, Phases 1/7 | OIDC, protected environments, ACR scanning and RBAC | Partially mitigated: dependency locks, SHA pins, and validation workflow are present; image scanning and provenance are production-only |
-| T-14 | Sensitive or malicious input crosses session/user boundaries in a no-auth local demo (TB-01, TB-02) | Spoofing, information disclosure | Medium: local access is not equivalent to authenticated user isolation | Bind all local services to loopback; keep the UI exchange transient and do not expose the demo publicly; add authentication and session isolation before broader access | API/UI owner, Phases 4/5 | User authentication and authorization are design-only for Phase 7 | Partially mitigated for local-only use; no user authentication or session isolation |
-| T-15 | Cloud identity, network, or private DNS assumptions permit unintended access (TB-09) | Spoofing, tampering, information disclosure | High: design assumptions can create an exposed or misrouted service | Verify SKU/network support, identity scope, private DNS, and egress paths; run static IaC checks and approved network-slice tests | Cloud owner, Phase 7 | Managed identity, RBAC, NSGs, private endpoints, private DNS | Designed in Bicep; deployed in an isolated test where private endpoints, private DNS, identities, and scoped roles were verified |
-| T-16 | Model output or injected content introduces a misleading URL (TB-01, TB-02, TB-03) | Tampering; LLM output manipulation | High: users may follow an attacker-controlled link presented as support evidence | Strip model-authored URLs and render citation links only from retrieval-bound server citations; the prompt-injection regression test checks that injected link instructions do not create a link | Agent and UI owners, Phases 4/5 | APIM does not replace output and citation validation | Partially mitigated for the tested answer path; independent adversarial URL testing is production-only |
-| T-17 | Overbroad OIDC federation permits an unintended repository or ref to deploy (TB-09) | Spoofing, elevation of privilege | High: a trusted federated identity can change Azure resources | Restrict the federated subject to this repository's `dev` environment; grant `id-token: write` only to OIDC jobs and require manual deployment | Cloud identity owner, Phase 7 | GitHub OIDC to the Entra application | Designed: validate the exact subject and environment protection before enabling federation |
-| T-18 | A compromised publishing job overwrites application images in ACR (TB-08, TB-09) | Tampering, elevation of privilege | High: an altered image can execute in Container Apps | Scope `AcrPush` to the target registry, publish only from `main`, and keep PR jobs free of OIDC credentials | Build/release owner, Phase 7 | Federated GitHub identity and private ACR | Designed: registry-scoped permission and main-only publishing; image scanning and provenance are production-only |
+## Reviewing the register
 
-## Approval and tracking
-
-* Each high-rated threat must have a mitigation and test owner before the phase
-  that implements it begins.
-* Phase owners must attach test evidence and update status to mitigated,
-  accepted, or deferred before their phase gate.
-* A high-rated residual risk requires explicit acceptance by an accountable
-  owner. No such acceptance is recorded yet.
-
-## Phase 1 review
-
-Reviewed on 2026-11-21 at the Phase 1 gate. Phase 1 added no new external data
-flow, trust boundary, or user-content store. It added local MongoDB and Azurite
-containers bound to loopback, a FastAPI health endpoint, a Next.js placeholder
-page, and a GitHub Actions validation workflow. No threats were added or
-re-rated.
-
-| Threat | Phase 1 scope | Evidence | Remaining before closure |
-|---|---|---|---|
-| T-10 | Keep secrets out of git; redact logs; scan for secrets | `.gitignore` excludes `.env*` except the example. Redaction covers root handlers and uvicorn server/access loggers. `tests/unit/test_logging.py` checks labeled secrets, credentialed URIs, SAS signatures, bearer tokens, JWTs, cookies, email addresses, exception text, and access-log query strings. Gitleaks runs in CI. | First GitHub-hosted Gitleaks run; trace and span redaction plus canary checks in Phase 6. Redaction is pattern-based, so query and response content must never be logged. |
-| T-11 | Developer credential handling only | No Azure AI Search credentials or client exist. Credentials stay in local environment configuration outside git. | Entra ID access, index isolation, and IP restriction tests in Phase 3; private endpoint design in Phase 7. |
-| T-13 | Dependency and workflow supply chain | `uv.lock` and `package-lock.json` installed with `--locked` and `npm ci`. `pip-audit` and `npm audit` are clean locally. Actions are pinned to full SHAs, verified against upstream release tags. The workflow uses `contents: read` and `persist-credentials: false`. | First GitHub-hosted CI run, branch protection ([OPS-001](../operations/backlog.md)), the `uv` bootstrap is installed without a hash, and container image scanning when application images exist. |
-
-Each threat's Phase 1 portion has the evidence listed above. The remaining
-items belong to later phases or to the first GitHub-hosted CI run. The user
-decides at the Phase 1 gate whether any of them must block closure.
-
-## Phase 2 review
-
-The 2026-11-21 live source check fetched the OpenText feed and created the
-[100-product manifest](../operations/phase-2-product-manifest-v1.json). It
-checked 97 selected product URLs sequentially within the original additional
-GET budget plus one separately authorized full-feed GET. Each returned HTTP 200
-and was skipped by the login-content heuristic; three products were not
-checked. Since the response bodies were not retained, the login classification
-may reflect page navigation rather than a protected login page. No page content
-was persisted or indexed.
-
-| Threat | Phase 2 evidence | Remaining before closure |
-|---|---|---|
-| T-02 | The manifest contains allowlisted HTTPS URLs. The queue now carries the manifest source URL, and the worker validates it before fetching. | Live redirect and URL edge cases remain covered by deterministic tests; no new trust boundary was introduced. |
-| T-03 | The original 100-additional-GET cap is exhausted; checks were sequential and a separately authorized feed GET was also used. | The final three products are unverified; any further live requests require authorization. |
-| T-04 | Protected responses and oversized streamed content are skipped by the worker; tests assert protected content is not persisted. | The 97 HTTP 200 login-content classifications need validation before treating those pages as protected or public. |
-| T-09 | No content was indexed or deleted in Phase 2. | Schema, freshness, reconciliation, and deletion tests belong to Phase 3. |
-| T-11 | No Azure AI Search connection or credential was used. | Search access controls and isolated test-index verification belong to Phase 3. |
-
-## Phase 3 source ingestion review
-
-The periodic source worker ([ADR-0006](../architecture/decisions/adr-0006-periodic-resumable-source-ingestion.md))
-is tested offline only.
-
-| Threat | Phase 3 evidence | Remaining before closure |
-|---|---|---|
-| T-02 | The source map validates seed hosts against the allowlist. Discovered fetch and citation URLs are validated again, TOC `href` values are character-restricted and reject `..`, sitemap URLs must match the seed host, sitemap indexes are not followed, and redirects are never followed. Sitemaps are parsed with `defusedxml`, which forbids DTDs. | Live egress allowlisting remains a cloud-design control. |
-| T-03 | Per-run request budget, at least 1 second between requests per host, at most 2 attempts per page, `Retry-After` capped at 60 seconds, a host abort on 429 or an unavailable `robots.txt`, product fail-fast, classified backoff, a 24-hour freshness skip, conditional GETs, and a single-runner lease. Tests cover each. | The first live run requires authorization. |
-| T-04 | The login heuristic now detects password fields, login forms and actions, SAML requests, and short sign-in pages, instead of any occurrence of the word "login". Docs-portal JSON is checked after extraction. Protected pages are skipped with a 30-day backoff, and tests assert that nothing is stored. | Validate against live pages during the first authorized run. |
-| T-14 | The coverage view is read-only, rendered on the server, and returns metadata only; the browser cannot reach FastAPI through it. | Session isolation for chat remains Phase 4/5. |
-| T-09 | Documents carry `fetched_at`; unchanged revisions and bodies are not reindexed; pages that leave the selection are deleted; and the search index is written before the canonical record so interrupted runs retry. | Live Search deletion and reindex tests. |
+* Re-rate a threat whenever a new data flow, store, or boundary is added.
+* A status moves to **Mitigated** only with an automated test that fails
+  without the control.
+* Production gaps are consolidated in the
+  [production gap register](../operations/production-gap-register.md).

@@ -1,53 +1,66 @@
 ---
-title: ADR-0003 Local-First Hosting Boundaries
-description: Proposed local MVP boundary and conceptual Azure deployment posture
+title: ADR-0003 Local-First Development with an Azure Counterpart
+description: Podman Compose for local development, and a matching Azure deployment from Bicep
 author: Udaybhanu Karmakar
-ms.date: 2026-11-22
+ms.date: 2026-11-24
 ms.topic: decision
 keywords:
   - ADR
-  - local-first
-  - deployment
+  - local development
+  - Podman
+  - Azure
 ---
 
 ## Status
 
-Phase 0 direction approved; cloud design and deployment gates remain in Phase 7.
+Accepted.
 
 ## Context
 
-The demonstration should run locally with Podman. The Azure architecture is a
-blueprint for Canada Central, and the application stack is not part of MVP
-deployment. A separately gated network slice is planned for Phase 7.
+The brief asks for Podman locally, MongoDB locally and Azure Cosmos DB for
+MongoDB in the cloud, Azurite locally and Azure Storage Queue in the cloud, and
+the user-provided Azure AI Search in both. The backend is hosted on Azure
+Container Apps.
 
-## Proposed decision
+## Decision
 
-* Keep the MVP local-first and organize the Next.js frontend, FastAPI/agent,
-  catalog, and workers as distinct logical components.
-* Run documentation ingestion as a scheduled, single-instance job
-  (`scripts/run_source_ingestion.py`), not as a long-running service. A MongoDB
-  lease prevents overlapping runs. The cloud counterpart is a Container Apps job
-  ([ADR-0006](adr-0006-periodic-resumable-source-ingestion.md)).
-* Use Podman for local orchestration, Azurite for local queue emulation, and
-  MongoDB for local metadata and canonical records.
-* Keep user-provided Azure AI Search and Foundry services external to the local
-  Podman network.
-* Do not deploy APIM, the application stack, Cosmos DB, Azure AI Search, or
-  Container Apps as part of the MVP.
-* Treat the network slice as a separate Phase 7 operation requiring explicit
-  subscription, cost, and deployment approval.
+* Run the whole application locally with Podman Compose: the web app, the API,
+  MongoDB, Azurite, and an Aspire dashboard for telemetry. Published ports bind
+  to `127.0.0.1` only, because the demo has no end-user sign-in.
+* Use Azure AI Search and Microsoft Foundry as the only cloud dependencies of
+  local development.
+* Run ingestion as a one-shot job, not a long-running service. Locally it is
+  `podman compose run`; in Azure it is a Container Apps job on a weekly
+  schedule. A lease in the store prevents overlapping runs.
+* Give every local component a cloud counterpart:
+
+| Local | Azure |
+|---|---|
+| `web` container | Container App with external ingress |
+| `api` container | Container App with internal ingress |
+| Ingestion command | Container Apps job |
+| MongoDB 8 | Azure Cosmos DB for MongoDB, or Azure DocumentDB Free |
+| Azurite queue | Azure Storage Queue |
+| Aspire dashboard | Application Insights and Log Analytics |
+| `.env` file | Key Vault secrets read with managed identity |
+
+## Rationale
+
+The same images, configuration names, and code paths run in both places, so a
+change tested locally behaves the same in Azure. Only connection settings and
+credentials differ.
 
 ## Alternatives considered
 
-* Deploy the full stack to Azure during the MVP: rejected because it adds
-  significant cost and exceeds the local-first scope.
-* Bind the local UI to a public interface: rejected because the local MVP has
-  no end-user authentication.
+* Develop against shared Azure resources only: rejected, because it is slower
+  to iterate and costs money for every developer.
+* Bind local services to all interfaces: rejected, because the demo has no
+  sign-in.
 
 ## Consequences
 
-Local demo operation depends on the developer's network, user-supplied
-credentials, service availability, quota, and Azure AI Search access policy.
-Today MongoDB and Azurite run in Podman, while the API, Next.js, and ingestion
-job run as host processes bound to loopback. They are containerized in
-Phase 6. The cloud topology remains subject to Phase 7 review.
+* Local development depends on network access and quota for the Foundry and
+  Search services.
+* Azurite can lag the Storage service API version; Compose pins a supported
+  version (`PRODUCT_SUPPORT_QUEUE_API_VERSION`).
+* The Azure stack is defined in [ADR-0010](adr-0010-azure-platform-and-api-management.md).

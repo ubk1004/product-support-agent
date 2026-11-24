@@ -1,108 +1,84 @@
 ---
 title: Product Support Agent Privacy Impact Assessment
-description: Draft privacy assessment for optional query and response retention in the local demo
+description: What personal data the demo handles, where it goes, and what must be decided before any retention of user content
 author: Udaybhanu Karmakar
-ms.date: 2026-11-21
+ms.date: 2026-11-23
 ms.topic: reference
 keywords:
   - privacy
   - data retention
   - product support
-estimated_reading_time: 7
+estimated_reading_time: 5
 ---
 
-## Status and scope
+## Summary
 
-The user approved this Phase 0b assessment for a local, non-production demo,
-with the listed conditions. Query/response retention remains disabled until
-provider handling, reviewer access, notice, redaction, TTL, and deletion are
-verified. No real query or response content has been collected by this
-implementation work.
+The demo does not store questions or answers. It sends them to two Azure
+services to produce an answer, and it keeps nothing afterwards. Telemetry
+contains no question or answer text. The original brief asks for all queries
+and responses to be retained for later review; that feature is **not built**
+and is blocked until the decisions below are made.
 
-## Purpose and data flow
+## Data the system handles
 
-The proposed purpose is limited to reviewing demo answer quality, investigating
-reported failures, and identifying abuse attempts. It is not approval for
-production analytics, marketing, user profiling, or unrelated model training.
+| Data | Personal data? | Where it goes | Kept? |
+|---|---|---|---|
+| Question typed by the user | Possibly, if the user types it | Browser, web app, API, Azure AI Search (as the search query and its embedding), Microsoft Foundry | No |
+| Answer and citations | Not unless echoed from the question | Same path back to the browser | No |
+| Conversation so far (up to 8 earlier turns) | Possibly | Held in the browser tab and sent with each question; discarded when the tab closes | No |
+| Documentation text, product names, URLs | No; public content | Mongo-compatible store, Azure AI Search | Yes |
+| Run records, fetch state, coverage | No; product IDs, public URLs, counts, outcomes, timestamps | Store, queue | Yes |
+| Logs, traces, metrics | No question or answer text; request IDs, outcomes, durations, token counts | Aspire locally; Log Analytics and Application Insights in Azure (30-day retention) | Yes, as metadata |
 
-When enabled after approval, a restricted MongoDB collection may contain:
+The web app and API set no cookies and keep no user identifier. Client
+addresses and user agents are removed from server spans, and API Management
+logs omit headers, bodies, and client IPs.
 
-* A redacted query and assistant response
-* A pseudonymous session/run identifier and timestamp
-* Retrieved evidence IDs and source URLs needed to verify citations
-* Model deployment identifier and non-sensitive operational status
+## Processing by Azure services
 
-Do not store secrets, credentials, raw retrieved source text, browser identifiers,
-or personal identifiers beyond what is necessary for the approved purpose.
-OpenTelemetry logs and traces remain content-free.
+A question is processed by Azure AI Search and by Foundry in the configured
+region. In Azure the Foundry deployments use the GlobalStandard SKU, which can
+process prompts in any Azure region, so it gives no data-residency guarantee. A
+deployment type with a regional or data-zone boundary is needed where residency
+matters. Provider-side logging and retention follow the settings of the
+customer's Foundry and Search resources, and the application does not control
+them.
 
-The documentation ingestion job and the coverage view process no personal
-data. Fetch state, run reports, and coverage responses contain product IDs,
-public URLs or hostnames, outcome categories, counts, and timestamps only.
+The application tells users nothing about this today. Before real users:
+publish a notice that states what is sent to the model provider, ask users not
+to enter personal, customer, or confidential data, and confirm the provider's
+data-handling terms.
 
-The query may also be sent to the user's LiteLLM and Foundry deployments to
-generate an answer. Their data handling, location, and retention settings must
-be verified separately. Local application retention controls do not control
-provider-side processing.
+## Retention of questions and answers (not built)
 
-## Proposed controls
+Settings exist so that the feature can be added safely
+(`PRODUCT_SUPPORT_QUERY_RESPONSE_RETENTION_ENABLED`, `PRODUCT_SUPPORT_QUERY_RESPONSE_RETENTION_DAYS`
+defaulting to 7, and `PRODUCT_SUPPORT_QUERY_REVIEWER_ROLE`, which is required
+when retention is enabled). No code writes or reads retained content.
 
-| Control | Proposed behavior | Approval status |
-|---|---|---|
-| Global feature flag | Retention remains off in the demo. Any future enabling requires policy and provider-handling approval; disabling retention must stop new writes but does not delete existing records. | Proposed |
-| Session choice | When global retention is enabled, show a clear notice before each session. Retention is on for the session unless the user opts out. | User-selected; implementation pending |
-| Purpose limitation | Use retained content only for the demo-quality, troubleshooting, and safety-review purposes stated in the notice. | Proposed |
-| Redaction | Redact detected secrets and sensitive personal data before persistence. If redaction fails or its result is uncertain, do not retain the content; record only a non-sensitive failure reason. | User-selected; implementation pending |
-| Access | Restrict any future retention store to approved reviewer identities and local database/operating-system access. Do not expose retained content through the chat API or public network. | User-selected role model; identity binding pending |
-| Retention period | Use an approved, positive retention period; a seven-day default was proposed. Apply automatic expiry and document deletion. | User-selected; implementation pending |
-| Deletion | Support deletion by session/run identifier and deletion of all retained demo content. Turning the flag off stops future writes but does not by itself delete prior records. | Proposed |
-| Provider handling | Verify Foundry/LiteLLM service settings and disclose that requests are sent to the user's configured deployments. Keep retention disabled until provider handling and residency are verified. | User-selected; verification required |
-| Incident response | Disable the global flag, preserve only necessary security metadata, restrict access, notify the accountable owner, and delete affected content when instructed. Named owners and escalation contacts are not assigned. | Owner assignment required |
+Do not build it until all of the following are decided and recorded:
 
-## Draft user notice
+| Decision | Requirement |
+|---|---|
+| Purpose | Limited to reviewing answer quality, investigating failures, and detecting abuse; no profiling, marketing, or model training |
+| Notice and choice | A notice before the first question and a per-session opt-out; confirm whether explicit consent is required for the audience |
+| Content | Redacted question and answer, a pseudonymous session ID, timestamp, evidence IDs and URLs, deployment name, and outcome. No secrets, raw retrieved text, or browser identifiers |
+| Redaction | Applied before persistence; if redaction fails or is uncertain, store nothing and record only a failure reason |
+| Access | A named reviewer role bound to identities, through an access-controlled collection that the chat API cannot read |
+| Retention period | A positive period with automatic expiry (the setting defaults to 7 days) |
+| Deletion | By session or run, and for all retained content; turning the flag off stops new writes but does not delete existing records |
+| Provider handling | Foundry and Search retention and residency settings reviewed |
+| Incident handling | A named owner and a contact process |
 
-> This local demo may retain a redacted copy of your question and the assistant's
-> answer for demo quality and safety review for up to **[configured number of
-> days]** days. Do not enter personal information, customer information,
-> credentials, or confidential content. Retention is on for this session unless
-> you opt out. Your question is also sent to the configured Microsoft Foundry
-> deployment to generate an answer.
+Until then, use only synthetic or explicitly approved content in testing.
 
-The notice must be reviewed and finalized before retention is enabled. Confirm
-whether an explicit consent action is required for the intended demo audience.
+## Residual risks
 
-## Data subject, access, and retention decisions
-
-* Data subjects are people using the local demo; the exact audience is not yet
-  named.
-* No end-user authentication is planned for the local MVP. Restrict access at
-  the operating-system and database boundary and do not expose the demo beyond
-  local use.
-* The user selected a parameterized 7-day retention period and a
-  parameterized reviewer role. A role-to-identity binding, legal/privacy
-  approval, final notice wording, and deletion service level remain open.
-* Do not use retained content to train or fine-tune models.
-* Use synthetic or explicitly approved test content until all required policy
-  approvals are recorded.
-
-## Risk and residual limitations
-
-Redaction can miss sensitive content. A local demo can still be accessed by
-other users of the same machine or by a configured provider. The opt-out and
-global flag do not replace notice, access control, TTL enforcement, deletion
-tests, or provider data-handling review. Retention remains disabled until these
-controls are specified and approved.
-
-## User approval checklist
-
-Before enabling retention, approve:
-
-1. Approve the 7-day default, parameter behavior, and deletion timing
-2. Bind the approved reviewer role to identities and database access
-3. Approve the notice and opt-out behavior
-4. Approve redaction scope and fail-closed behavior
-5. Verify Foundry/LiteLLM data-handling and residency settings
-6. Assign the incident owner and user-contact process
-
-The assessment must be approved before any real user query or response content
-is retained.
+* Users can type personal data into a question. It reaches the model provider
+  even though the application stores nothing.
+* Redaction is pattern-based and can miss sensitive content; the safeguard is
+  that question and answer text are never logged or traced.
+* A person with access to the demo machine or the Azure subscription can see
+  what those systems keep, such as the Foundry provider's own logs.
+* Named privacy and incident owners are not assigned
+  ([support ownership](../architecture/support-ownership.md)).

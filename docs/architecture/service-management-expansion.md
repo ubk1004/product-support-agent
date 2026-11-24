@@ -14,19 +14,19 @@ keywords:
 ## Status
 
 **Design only.** Nothing in this document is implemented, deployed, or tested.
-It answers requirement 2 in [Instructions.md](../../Instructions.md): the
-agent will later extend to the full support and service management system. The
-current MVP is read-only over anonymous public documentation and has no user
-identity.
+It answers goal 2 in [Instructions.md](../../Instructions.md): the agent
+will later extend to the full support and service management system. The
+current agent is read-only over anonymous public documentation, has two tools
+(`search_documentation` and `list_products`), and has no user identity.
 
 The design keeps the existing pattern: the model only calls typed tools, tools
 return evidence IDs, the server resolves links, and retrieved text is
 untrusted. New capabilities add identity, authorization, and a human approval
 step for anything that changes data.
 
-## Scope in two stages
+## Scope in two capability levels
 
-| Stage | Capability | Data touched | Gate |
+| Level | Capability | Data touched | Gate |
 |---|---|---|---|
 | 1. Read-only | Answer questions about the signed-in user's own tickets, requests, and knowledge articles | Service Management records the user may already read | User sign-in and per-user authorization |
 | 2. Proposed changes | Draft a new ticket, a comment, or a field change, then submit only after the user approves it | Writes to Service Management | Explicit approval, audit record, idempotency key |
@@ -116,15 +116,18 @@ gateway re-checks authorization on every call.
 
 1. Which identity provider the Service Management tenant trusts, and whether
    on-behalf-of exchange is supported for its API.
-2. Which change types are allowed in stage 2, and which need a second approver.
+2. Which change types are allowed at level 2, and which need a second approver.
 3. Retention and review access for audit records, under the
    [privacy impact assessment](../security/privacy-impact-assessment.md).
 4. Whether Service Management knowledge articles are indexed into Azure AI
    Search with per-user access trimming, or fetched live through the gateway.
 
-## Phased path
+## Delivery stages
 
-| Phase | Result | Test evidence |
+These are the steps within stage 5 of the
+[path to production](architecture-overview.md#path-from-proof-of-concept-to-production).
+
+| Stage | Result | Test evidence |
 |---|---|---|
 | A | Sign-in and per-user token validation in the existing chat API | Unit and integration tests for token checks; unauthenticated requests rejected |
 | B | Tool gateway with one read tool against a Service Management test tenant | Contract tests; authorization-denied cases; injection tests using ticket text |

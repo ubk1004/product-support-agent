@@ -2,7 +2,7 @@
 title: ADR-0006 Periodic, Resumable Documentation Ingestion
 description: Source map, fail-fast behavior, and durable fetch state for a scheduled documentation indexer
 author: Udaybhanu Karmakar
-ms.date: 2026-11-22
+ms.date: 2026-11-24
 ms.topic: decision
 keywords:
   - ADR
@@ -13,25 +13,15 @@ keywords:
 
 ## Status
 
-Accepted for the demo on 2026-11-22 and amended on 2026-11-23. The code and the
-[source map](../../operations/phase-3-source-map-v1.json) are implemented and
-tested offline. A live run stored 300 pages for 10 products with 0 failures.
-Source terms remain unverified (production-only, see
-[ADR-0007](adr-0007-demo-delivery-mode.md)).
-
-Amendment, 2026-11-23: the runner now embeds and indexes each page into Azure AI
-Search during the run, and deletes removed pages from Search as well as MongoDB.
-The earlier "embeddings are deferred" behavior is available as
-`--repository-only`.
+Accepted. Queue-driven execution of this worker is described in
+[ADR-0009](adr-0009-queue-driven-ingestion.md).
 
 ## Context
 
-Earlier source checks used the `my.opentext.com` product pages as the content
-source. Those pages are client-rendered, so they never yielded product text and
-repeatedly classified as protected. The
-[delivery probe](../../operations/phase-3-source-delivery-probe-2026-11-22.json)
-found two anonymous, documented delivery paths: JSON files behind the
-`docs.microfocus.com` single-page app, and per-product sitemaps on
+The `my.opentext.com` product pages are client-rendered and yield no product
+text, so they cannot be the content source. Two anonymous, documented delivery
+paths exist for the sampled products: JSON files behind the
+`docs.microfocus.com` documentation portal, and per-product sitemaps on
 `admhelp.microfocus.com`.
 
 The indexer must run on a schedule, such as weekly. It must not spend requests on
@@ -85,11 +75,11 @@ successful URLs to be fetched again within a day.
   * An identifying User-Agent.
   * `robots.txt` is fetched once per host per run. Only a 404 or 410 means
     "allow all"; any other non-2xx response, including 401 and 403, fails closed.
-* **Single-runner lease.** The runner script takes a 6-hour MongoDB lease, so
-  overlapping scheduled runs exit instead of doubling the request load.
+* **Single-runner lease.** Each run takes a 6-hour lease in the store, so
+  overlapping runs exit (code 3) instead of doubling the request load.
 * **Selection changes are reconciled.** After a complete product pass, pages
   that dropped out of the selection have their canonical documents deleted.
-* **Search stays in step with MongoDB.** By default the runner uses
+* **Search stays in step with the store.** By default the worker uses
   `DocumentIndexingService`: it writes chunks and vectors to the versioned
   Search index before it commits the canonical document, and it deletes both
   when a page leaves the selection. `--repository-only` (and `--discover-only`)
