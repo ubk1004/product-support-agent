@@ -131,6 +131,19 @@ def test_azure_ids_are_aliased_consistently() -> None:
     assert real in redact("request 3f2b1c9e-7a44-4d0e-9b15-6c8e2d1a0f77 finished")
 
 
+def test_tenant_ids_in_token_issuer_urls_are_aliased() -> None:
+    tenant = "49b0c9e1-7a44-4d0e-9b15-6c8e2d1a0f77"
+    text = (
+        f"wrong issuer 'https://sts.windows.net/{tenant}/' and "
+        f"authority https://login.windows.net/{tenant} and "
+        f"https://login.microsoftonline.com/{tenant}/v2.0"
+    )
+    result = redact(text)
+    assert tenant not in result
+    assert result.count("sts.windows.net/") == 1
+    assert redact(result) == result, "aliasing must be idempotent so --check can pass"
+
+
 def test_real_email_is_aliased_and_noreply_kept() -> None:
     assert "someone@corp.test" not in redact("cc someone@corp.test", {})
     assert redact("57718712+user@users.noreply.github.com", {}) == (

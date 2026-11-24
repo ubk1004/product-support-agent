@@ -1,14 +1,12 @@
 using './main.bicep'
 
 param environment = 'tst'
-param instance = '23'
-param location = 'canadaeast'
-param locationAbbreviation = 'cae'
+param instance = '01'
+param location = 'canadacentral'
 param owner = 'platform-team'
 param costCenter = 'deployment-test'
 param deployFoundry = true
 param useDocumentDbFreeTier = true
-param documentDbLocation = 'canadacentral'
 param deployApim = true
 param apimPublisherEmail = 'deployment-test@example.com'
 param apiTargetPort = 80

@@ -74,7 +74,7 @@ a refused hostile prompt, and the OpenTelemetry trace of a chat request.
 | Does it store questions or answers? | No. Retention was requested in the brief but is **not built** and is blocked on privacy decisions. |
 | Who can use it? | Anyone with network access: there is no end-user sign-in. Keep local runs on `127.0.0.1` and Azure environments to the team. |
 | Is it production ready? | No. See the [production gap register](docs/operations/production-gap-register.md). |
-| Has it run in Azure? | The Bicep has been deployed to an isolated Azure environment and used end to end. The GitHub Actions pipelines are tested offline and have not run on GitHub. See the [cloud setup guide](infra/README.md). |
+| Has it run in Azure? | Yes. The Bicep deployed the full stack successfully in two stages, the API and web images were published to the private registry and deployed to Container Apps, and testing against the deployed web app passed: coverage, cited answers, follow-ups, refusals, and input validation. Details and limits are in [Verified deployment](infra/README.md#verified-deployment). The GitHub Actions pipelines are tested offline and have not run on GitHub. |
 
 ## Quick start (local)
 

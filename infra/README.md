@@ -20,6 +20,31 @@ to remove it. The design and its reasons are in the
 [solution architecture](../docs/architecture/architecture-overview.md) and
 [ADR-0010](../docs/architecture/decisions/adr-0010-azure-platform-and-api-management.md).
 
+## Verified deployment
+
+The templates in this repository have been deployed to a test environment and
+the running application has been tested there.
+
+| Area | Result |
+|---|---|
+| Infrastructure | Both stages deployed successfully: network, platform, data, identity, Foundry with both model deployments, Container Apps, and classic API Management (Developer, external VNet) all report `Succeeded` |
+| Network and access | Key Vault, the registry, Azure AI Search, Storage, and the Mongo-compatible store have public access disabled; shared keys are off on Storage; the registry has no admin user; the Foundry endpoint is public with key authentication, as documented |
+| Identity | The API, ingestion, and registry-pull identities hold exactly the roles listed in the [identity table](../docs/architecture/architecture-overview.md#identity-and-access), each scoped to one resource |
+| Code deployment | The API and web images were built from this repository, published to the private registry with a commit SHA tag, and deployed. The API (internal ingress) and web app (external ingress) are `Running`; the ingestion job runs from the same image |
+| Ingestion | The ingestion job completed successfully, and the coverage page reports 10 of 100 demo products with indexed documentation |
+| Application tests | Through the deployed web app: the health route and home page respond; input validation returns the documented 400, 413, 415, and 422 responses; a documentation question returns a grounded answer with a citation to a page that exists; a follow-up question uses the conversation context; the product list question returns exactly the 10 indexed products; a question about a product with no indexed source and a prompt-injection attempt both get the standard refusal with no invented link |
+| API Management | The deployed gateway exposes only `POST /chat` and `GET /catalog/coverage`, requires a subscription key, and carries the documented rate limit (30 calls per minute) and body limit (48 KB) |
+
+Not covered by this verification:
+
+* The GitHub Actions workflows. They are tested offline and have not run on
+  GitHub; the deployment above used the same templates and images from the
+  command line.
+* A request through API Management with a subscription key to the API. The web
+  app calls the API directly.
+* The evaluation thresholds in Azure; the evaluation is run locally.
+* A manual browser session, load, and failure-recovery testing.
+
 ## What gets created
 
 One resource group per environment (`dev`, `tst`, or `prd`), named
@@ -316,7 +341,9 @@ The `infra.yml` workflow repeats the Bicep checks for all three environments.
 ## Smoke parameters
 
 `infra/bicep/smoke.bicepparam` is a ready-made parameter set for testing the
-template itself: `tst`, a new Foundry account, DocumentDB Free, API Management,
-public hello-world images on port 80, and a manual ingestion job. Use it only
-for template tests. To test the application, deploy with real images and
-`apiTargetPort` 8000 and `webTargetPort` 3000, as the pipelines do.
+template itself: a new Foundry account, DocumentDB Free, API Management, public
+hello-world images on port 80, and a manual ingestion job. Set `location` and,
+if the free database is not offered there, `documentDbLocation` to regions that
+offer the services (see [Capacity and region checks](#capacity-and-region-checks)).
+Use it only for template tests. To test the application, deploy with real images
+and `apiTargetPort` 8000 and `webTargetPort` 3000, as the pipelines do.

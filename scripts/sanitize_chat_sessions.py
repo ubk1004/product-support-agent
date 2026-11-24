@@ -14,8 +14,10 @@ What it does:
   SAS signatures, ``Bearer``/``Basic`` values, API-key headers, ``*_KEY=``/``*_SECRET=``
   assignments, and passwords in URLs. Values must look random (length, entropy, mixed
   characters), so placeholders, identifiers and the public Azurite key are left alone.
-* Replaces Azure resource host names and subscription/tenant IDs with stable aliases derived
-  from a hash, so the same real value always maps to the same alias.
+* Replaces Azure resource host names and subscription/tenant IDs, including the tenant ID in
+  token-issuer URLs such as ``https://sts.windows.net/<id>/``. IDs become fabricated UUIDs
+  from a random per-run key, so an alias cannot be recomputed from a known real ID; within one
+  run the same real ID always gets the same alias.
 * Replaces e-mail addresses other than documentation or no-reply ones.
 
 Matched values are never printed; ``--check`` reports only the file and the rule.
@@ -37,9 +39,11 @@ import argparse
 import configparser
 import getpass
 import hashlib
+import hmac
 import json
 import math
 import re
+import secrets
 import sys
 import uuid
 from collections import Counter
@@ -154,7 +158,9 @@ _AZURE_HOST = re.compile(
     re.IGNORECASE,
 )
 _AZURE_ID = re.compile(
-    rf"(?P<pre>/subscriptions/|\b(?:subscription|tenant)(?:[_ -]?id)?\b[\"'\\\s:=]{{1,8}})"
+    rf"(?P<pre>/subscriptions/"
+    rf"|(?:sts\.windows\.net|login\.windows\.net|login\.microsoftonline\.com)/"
+    rf"|\b(?:subscription|tenant)(?:[_ -]?id)?\b[\"'\\\s:=]{{1,8}})"
     rf"(?P<val>{_UUID})",
     re.IGNORECASE,
 )
@@ -230,11 +236,30 @@ def _alias_azure_host(match: re.Match[str]) -> str:
     return f"azure-{_short_hash(label)}.{match.group('suffix')}"
 
 
+# Aliases for subscription and tenant IDs are fabricated, not derived from the real value: they
+# come from a keyed hash whose random key lives only in this process and is never stored. The same
+# real ID maps to the same alias within one run, nobody can recompute an alias from a known real
+# ID, and a new run produces new aliases. Version 8 (custom) UUIDs mark an ID as already aliased,
+# so running the script again leaves its own output alone.
+_ALIAS_KEY = secrets.token_bytes(32)
+_ALIAS_UUID_VERSION = 8
+
+
+def _fabricated_uuid(value: str) -> uuid.UUID:
+    digest = hmac.new(_ALIAS_KEY, value.encode("utf-8"), hashlib.sha256).digest()[:16]
+    number = int.from_bytes(digest, "big")
+    number = (number & ~(0xF << 76)) | (_ALIAS_UUID_VERSION << 76)  # version bits
+    number = (number & ~(0x3 << 62)) | (0x2 << 62)  # RFC 4122 variant bits
+    return uuid.UUID(int=number)
+
+
 def _alias_azure_id(match: re.Match[str]) -> str:
     value = match.group("val").lower()
     if len(set(value.replace("-", ""))) <= 2:
         return match.group(0)  # 0000.../1111...: documentation placeholder
-    return match.group("pre") + str(uuid.uuid5(uuid.UUID(int=0), value))
+    if uuid.UUID(value).version == _ALIAS_UUID_VERSION:
+        return match.group(0)  # already an alias, so reruns are stable
+    return match.group("pre") + str(_fabricated_uuid(value))
 
 
 def _alias_email(match: re.Match[str]) -> str:
